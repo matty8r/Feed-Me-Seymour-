@@ -32,7 +32,52 @@ real typography and the media real media:
 - **Sharing.** `ShareLink` everywhere: rows, the reader, images, audio, embeds,
   and in every context menu. Plus copy link and open in browser.
 
-Everything stays on the device. No account, no server, no analytics.
+No account, no analytics, no server in the middle — feeds are fetched straight
+from their publishers.
+
+## iCloud sync
+
+Subscriptions, favorites and read state follow your Apple ID. Article text and
+media do not: they stay on whichever device downloaded them, and are re-fetched
+from the publisher when needed. A saved article is a few seconds of network; a
+few thousand HTML blobs in the private database is not worth the round trip.
+
+That's implemented as **two SwiftData stores in one container**:
+
+| Store | Models | Backed by |
+| --- | --- | --- |
+| `FeedMeSeymourLocal` | `Feed`, `Article`, `MediaAttachment` | On disk only |
+| `FeedMeSeymourCloud` | `SyncedSubscription`, `SyncedArticleState` | CloudKit private database |
+
+SwiftData won't let a model in a synced store hold a relationship to one in a
+local store, so rather than tear apart the `Feed`↔`Article` graph, the cloud
+store holds small **mirror records** keyed by natural identifiers — a feed's
+URL, an item's guid — because `PersistentIdentifier` differs on every device.
+`SyncCoordinator` reconciles the two on launch, on returning to the foreground,
+on backgrounding (so a star you just tapped gets pushed), after every refresh,
+and whenever CloudKit delivers a remote change.
+
+Details worth knowing:
+
+- **Conflicts** resolve last-writer-wins against explicit clocks
+  (`Feed.metadataUpdatedAt`, `Article.stateUpdatedAt`), not CloudKit's delivery
+  order. The publisher's own feed title is never overwritten by a stale mirror;
+  your rename and your ordering are.
+- **Unsubscribing writes a tombstone**, not a delete. A hard delete would simply
+  be undone by the next device to sync, which still has the subscription.
+  Re-subscribing afterwards wins over the tombstone.
+- **A favorite can arrive before its article does.** If you star something on
+  your Mac and your iPhone has never seen that item, the phone stands in a
+  placeholder that shows in Favorites and fills itself in on the next refresh of
+  that feed.
+- **Read state expires after 60 days** in the cloud store. Whether you read
+  something two months ago isn't worth a record. Favorites are kept forever.
+- Sync can be turned off in Settings.
+
+**Building without a paid Apple Developer account:** delete the four iCloud keys
+from `FeedMeSeymour.entitlements` (they're marked with a comment). The container
+falls back to a fully local store on its own, and the app behaves exactly as it
+did before sync existed.
 
 ## Getting started
 
@@ -70,6 +115,7 @@ FeedMeSeymour/
     Models/     SwiftData: Feed, Article, MediaAttachment
     Feeds/      RSS/Atom/RDF/JSON parsing, discovery, fetching, refresh, OPML
     Content/    HTML tokenizer + entities -> ArticleBlock, with a render cache
+    Sync/       CloudKit mirror records and the reconcile pass
   Design/       Typography, Palette, ReaderSettings
   Views/        Sidebar, Timeline, Reader
   Media/        AVKit video, audio playback, animated images, embeds, lightbox
@@ -93,6 +139,8 @@ Notable pieces:
 - **`FeedRefreshService`** fetches every subscription concurrently off the main
   actor with conditional GETs (`ETag` / `If-Modified-Since`), then merges on the
   main actor. Old entries are pruned; favorites never are.
+- **`SyncCoordinator`** reconciles the local store against the iCloud mirror —
+  see [iCloud sync](#icloud-sync) above.
 
 ## Tests
 
@@ -104,9 +152,11 @@ xcodebuild test -scheme FeedMeSeymour -destination 'platform=macOS'
 
 The suite covers the feed parsers (RSS, Atom with escaped and xhtml content,
 JSON Feed, date dialects, iTunes durations), feed discovery, OPML round-tripping,
-and the HTML-to-blocks layer (emphasis, links, entities, lists, tables, figures,
+the HTML-to-blocks layer (emphasis, links, entities, lists, tables, figures,
 galleries, lazy images, video source selection, embeds, code blocks, and
-deliberately malformed markup).
+deliberately malformed markup), and the sync reconcile pass (adoption,
+tombstones, re-subscription, rename conflicts in both directions, duplicate
+mirrors, placeholder favorites and state expiry) against an in-memory store.
 
 ## Known limits
 
@@ -115,5 +165,9 @@ deliberately malformed markup).
   would want revisiting before raising the cap much further.
 - Background refresh happens when the app is frontmost or becomes active, not
   via `BGTaskScheduler`.
+- The reconcile pass loads every article to compare state clocks. Fine at the
+  retention cap; it would want a predicate-based pass before that grows.
+- "Mark all as read" on a large store creates one cloud record per article in
+  the following reconcile. Bounded by the 60-day expiry, but it is a burst.
 - The project builds in Swift 5 language mode with minimal concurrency checking.
   Moving to Swift 6 is a worthwhile follow-up.

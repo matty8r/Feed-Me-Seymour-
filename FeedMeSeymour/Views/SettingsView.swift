@@ -92,9 +92,25 @@ struct SettingsView: View {
                 }
             }
 
+            Section("iCloud") {
+                Toggle("Sync with iCloud", isOn: Binding(
+                    get: { model.sync.isEnabled },
+                    set: { model.sync.isEnabled = $0 }
+                ))
+                .disabled(!model.sync.isCloudBacked)
+
+                Text(model.sync.statusDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Text("Subscriptions, favorites and read state travel between your devices. Article text and media stay on each device and are re-downloaded from the publisher when needed.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 LabeledContent("Version", value: Self.versionString)
-                Text("Feed Me, Seymour! keeps everything on your device. No account, no analytics, no server in the middle.")
+                Text("No account, no analytics. Feeds are fetched straight from their publishers, and anything that syncs goes only to your own private iCloud database.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

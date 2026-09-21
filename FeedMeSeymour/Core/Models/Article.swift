@@ -36,6 +36,13 @@ final class Article {
     var isStarred: Bool = false
     var starredAt: Date?
 
+    /// Clock for `isRead` / `isStarred`, compared against the iCloud mirror.
+    var stateUpdatedAt: Date = Date.distantPast
+
+    /// A favourite that arrived from another device before its body did. The
+    /// next refresh of this feed fills it in.
+    var isPlaceholder: Bool = false
+
     var bannerImageURL: URL?
     var wordCount: Int = 0
 
@@ -101,5 +108,15 @@ final class Article {
     func toggleStar() {
         isStarred.toggle()
         starredAt = isStarred ? Date() : nil
+        stateUpdatedAt = .now
+    }
+
+    /// How a *person's* action should change read state: bumping the clock is
+    /// what lets iCloud tell which device knows best. The sync coordinator
+    /// assigns `isRead` directly when it is adopting another device's clock.
+    func setRead(_ value: Bool) {
+        guard isRead != value else { return }
+        isRead = value
+        stateUpdatedAt = .now
     }
 }

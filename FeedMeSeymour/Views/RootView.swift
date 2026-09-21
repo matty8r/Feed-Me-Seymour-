@@ -9,6 +9,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import CoreData
 import UniformTypeIdentifiers
 
 struct RootView: View {
@@ -71,8 +72,27 @@ struct RootView: View {
             if let message { model.showStatus(message) }
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            Task { await refreshIfStale() }
+            switch phase {
+            case .active:
+                Task {
+                    await synchronize()
+                    await refreshIfStale()
+                }
+            case .inactive, .background:
+                // Push anything starred or marked read since the last pass
+                // before this process loses the CPU.
+                model.sync.reconcile(in: context)
+            @unknown default:
+                break
+            }
+        }
+        .onReceive(
+            NotificationCenter.default
+                .publisher(for: .NSPersistentStoreRemoteChange)
+                .receive(on: RunLoop.main)
+        ) { _ in
+            // CloudKit pulled something down.
+            Task { await synchronize() }
         }
         .modifier(SettingsSheetModifier())
     }
@@ -99,8 +119,25 @@ struct RootView: View {
     // MARK: - Lifecycle
 
     private func firstRun() async {
+        await synchronize()
+
+        // On a second device's first launch, CloudKit may not have delivered
+        // the mirror records yet. Give it a moment before deciding the account
+        // is empty and planting the starter set on top of the reader's feeds.
+        if model.sync.isActive, ((try? context.fetchCount(FetchDescriptor<Feed>())) ?? 0) == 0 {
+            try? await Task.sleep(for: .seconds(2.5))
+            await synchronize()
+        }
+
         Persistence.seedIfEmpty(context)
         await refreshIfStale()
+    }
+
+    private func synchronize() async {
+        let adopted = model.sync.reconcile(in: context)
+        guard !adopted.isEmpty else { return }
+        model.showStatus("Added \(adopted.count) subscription\(adopted.count == 1 ? "" : "s") from iCloud.")
+        await model.refresher.refresh(adopted, in: context)
     }
 
     private func refreshIfStale() async {

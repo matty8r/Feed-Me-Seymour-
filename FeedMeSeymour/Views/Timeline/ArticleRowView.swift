@@ -62,7 +62,7 @@ struct ArticleRowView: View {
         .contextMenu { menu }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
-                article.isRead.toggle()
+                article.setRead(!article.isRead)
                 try? context.save()
             } label: {
                 Label(article.isRead ? "Unread" : "Read", systemImage: article.isRead ? "circle" : "checkmark.circle")
@@ -146,6 +146,9 @@ struct ArticleRowView: View {
             if article.hasVideo {
                 mediaBadge("play.rectangle", "Video")
             }
+            if article.isPlaceholder {
+                mediaBadge("icloud", "Favorited on another device")
+            }
             if let author = article.author?.nilIfEmpty, !isCompact {
                 Text(author)
                     .font(.system(size: 11))
@@ -179,7 +182,7 @@ struct ArticleRowView: View {
             try? context.save()
         }
         Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
-            article.isRead.toggle()
+            article.setRead(!article.isRead)
             try? context.save()
         }
         Divider()

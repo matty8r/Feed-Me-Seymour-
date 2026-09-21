@@ -76,6 +76,7 @@ struct SubscriptionListView: View {
             Button("Cancel", role: .cancel) { feedBeingRenamed = nil }
             Button("Save") {
                 feedBeingRenamed?.customTitle = draftTitle.trimmed.nilIfEmpty
+                feedBeingRenamed?.touchMetadata()
                 try? context.save()
                 feedBeingRenamed = nil
             }
@@ -163,7 +164,7 @@ struct SubscriptionListView: View {
             Task { await model.refresher.refresh(feed, in: context) }
         }
         Button("Mark All as Read", systemImage: "checkmark.circle") {
-            for article in feed.articles { article.isRead = true }
+            for article in feed.articles { article.setRead(true) }
             try? context.save()
         }
         Divider()
@@ -189,19 +190,20 @@ struct SubscriptionListView: View {
     private func move(from source: IndexSet, to destination: Int) {
         var ordered = feeds
         ordered.move(fromOffsets: source, toOffset: destination)
-        for (index, feed) in ordered.enumerated() { feed.sortIndex = index }
+        for (index, feed) in ordered.enumerated() where feed.sortIndex != index {
+            feed.sortIndex = index
+            feed.touchMetadata()
+        }
         try? context.save()
     }
 
     private func remove(_ feed: Feed) {
-        if model.selection == .feed(feed.persistentModelID) { model.select(.all) }
-        context.delete(feed)
-        try? context.save()
+        model.unsubscribe(feed, in: context)
     }
 
     private func markAllRead() {
         let articles = (try? context.fetch(FetchDescriptor<Article>())) ?? []
-        for article in articles where !article.isRead { article.isRead = true }
+        for article in articles where !article.isRead { article.setRead(true) }
         try? context.save()
     }
 }

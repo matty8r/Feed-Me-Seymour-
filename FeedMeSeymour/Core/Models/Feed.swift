@@ -27,6 +27,11 @@ final class Feed {
     var iconURL: URL?
 
     var dateAdded: Date = Date()
+
+    /// Clock for the reader-editable metadata above (title override, ordering).
+    /// Compared against the iCloud mirror to decide which side is newer.
+    var metadataUpdatedAt: Date = Date()
+
     var lastFetched: Date?
     var lastFetchErrorDescription: String?
 
@@ -55,7 +60,14 @@ final class Feed {
         self.homePageURL = homePageURL
         self.iconURL = iconURL
         self.dateAdded = Date()
+        self.metadataUpdatedAt = Date()
         self.sortIndex = sortIndex
+    }
+
+    /// Call after any change a person made on purpose, so it wins over a
+    /// staler copy on another device.
+    func touchMetadata() {
+        metadataUpdatedAt = .now
     }
 
     /// What the UI should actually print.

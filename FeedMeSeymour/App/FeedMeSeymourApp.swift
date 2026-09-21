@@ -12,8 +12,14 @@ import SwiftData
 @main
 struct FeedMeSeymourApp: App {
 
-    @State private var model = AppModel()
-    private let container = Persistence.makeContainer()
+    @State private var model: AppModel
+    private let container: ModelContainer
+
+    init() {
+        let store = Persistence.makeStore()
+        container = store.container
+        _model = State(initialValue: AppModel(isCloudBacked: store.isCloudBacked))
+    }
 
     var body: some Scene {
         WindowGroup {

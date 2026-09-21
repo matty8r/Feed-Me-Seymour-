@@ -72,6 +72,11 @@ final class AppModel {
 
     let settings = ReaderSettings()
     let refresher = FeedRefreshService()
+    let sync: SyncCoordinator
+
+    init(isCloudBacked: Bool) {
+        sync = SyncCoordinator(isCloudBacked: isCloudBacked)
+    }
 
     var isReaderExpanded: Bool { expandedArticleID != nil }
 
@@ -80,7 +85,7 @@ final class AppModel {
     func open(_ article: Article, markRead: Bool = true) {
         selectedArticleID = article.persistentModelID
         expandedArticleID = article.persistentModelID
-        if markRead, settings.marksReadOnOpen { article.isRead = true }
+        if markRead, settings.marksReadOnOpen { article.setRead(true) }
     }
 
     func toggleExpansion(for article: Article?) {
@@ -142,6 +147,15 @@ final class AppModel {
         self.selection = selection
         expandedArticleID = nil
         selectedArticleID = nil
+    }
+
+    /// Unsubscribing has to leave a tombstone behind, or the next device to
+    /// sync will hand the subscription straight back.
+    func unsubscribe(_ feed: Feed, in context: ModelContext) {
+        if selection == .feed(feed.persistentModelID) { select(.all) }
+        sync.noteUnsubscribe(from: feed, in: context)
+        context.delete(feed)
+        try? context.save()
     }
 
     func showStatus(_ message: String) {

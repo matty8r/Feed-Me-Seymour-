@@ -116,7 +116,7 @@ struct TimelinePane: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleRead)) { _ in
             guard let article = currentArticle else { return }
-            article.isRead.toggle()
+            article.setRead(!article.isRead)
             try? context.save()
         }
         .onReceive(NotificationCenter.default.publisher(for: .openInBrowser)) { _ in
@@ -252,7 +252,7 @@ struct TimelinePane: View {
                 ))
                 Divider()
                 Button("Mark All as Read", systemImage: "checkmark.circle") {
-                    for article in articles where !article.isRead { article.isRead = true }
+                    for article in articles where !article.isRead { article.setRead(true) }
                     try? context.save()
                 }
                 #if os(iOS)

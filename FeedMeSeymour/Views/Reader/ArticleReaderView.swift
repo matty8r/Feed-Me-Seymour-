@@ -122,7 +122,7 @@ struct ArticleReaderView: View {
                     Button("Open in Browser", systemImage: "safari") { openURL(url) }
                     Button("Copy Link", systemImage: "link") { Platform.copyToPasteboard(url.absoluteString) }
                     Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
-                        article.isRead.toggle()
+                        article.setRead(!article.isRead)
                         try? context.save()
                     }
                 } label: {
@@ -206,7 +206,9 @@ struct ArticleReaderView: View {
 
     private var emptyBody: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("This entry is only a headline.")
+            Text(article.isPlaceholder
+                 ? "This favorite came from another device. Its text will appear the next time this feed is refreshed."
+                 : "This entry is only a headline.")
                 .font(typography.body)
                 .foregroundStyle(palette.secondaryInk)
             if let url = article.url {
@@ -228,7 +230,7 @@ struct ArticleReaderView: View {
     private func render() {
         rendered = ArticleRenderer.shared.render(article)
         if settings.marksReadOnOpen, !article.isRead {
-            article.isRead = true
+            article.setRead(true)
             try? context.save()
         }
     }

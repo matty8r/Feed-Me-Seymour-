@@ -169,6 +169,15 @@ final class FeedRefreshService {
         let currentHTML = article.contentHTML ?? article.summaryHTML
         guard incomingHTML != currentHTML || item.title != article.title else { return }
 
+        if article.isPlaceholder {
+            // A stub adopted from iCloud, meeting its actual contents for the
+            // first time. Take everything the publisher offers.
+            if let url = item.url { article.url = url }
+            if let published = item.datePublished { article.publishedAt = published }
+            if let author = item.author { article.author = author }
+            article.isPlaceholder = false
+        }
+
         if let title = item.title?.nilIfEmpty { article.title = title }
         if let content = item.contentHTML { article.contentHTML = content }
         if let summary = item.summaryHTML { article.summaryHTML = summary }
@@ -213,8 +222,4 @@ final class FeedRefreshService {
         return feed
     }
 
-    func unsubscribe(_ feed: Feed, in context: ModelContext) {
-        context.delete(feed)
-        try? context.save()
-    }
 }
