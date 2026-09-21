@@ -1,0 +1,281 @@
+//
+//  TimelinePane.swift
+//  Feed Me, Seymour!
+//
+//  The right-hand pane: one chronological list of everything subscribed, and
+//  the reader that expands out of it to take the whole pane over.
+//
+
+import SwiftUI
+import SwiftData
+import Combine
+
+struct TimelinePane: View {
+
+    @Environment(AppModel.self) private var model
+    @Environment(ReaderSettings.self) private var settings
+    @Environment(\.modelContext) private var context
+    @Environment(\.palette) private var palette
+    @Environment(\.openURL) private var openURL
+
+    @Query(sort: [SortDescriptor(\Article.publishedAt, order: .reverse)])
+    private var allArticles: [Article]
+
+    @State private var hasSetInitialSelection = false
+
+    // MARK: - Scoping
+
+    private var scopedArticles: [Article] {
+        var articles: [Article]
+
+        switch model.selection {
+        case .none, .some(.all):
+            articles = allArticles
+        case .some(.unread):
+            articles = allArticles.filter { !$0.isRead }
+        case .some(.starred):
+            articles = allArticles.filter(\.isStarred)
+        case .some(.feed(let id)):
+            articles = allArticles.filter { $0.feed?.persistentModelID == id }
+        }
+
+        if settings.hidesReadArticles, model.selection != .starred {
+            // Never hide the article the reader is looking at.
+            articles = articles.filter { !$0.isRead || $0.persistentModelID == model.selectedArticleID }
+        }
+
+        let query = model.searchText.trimmed
+        if !query.isEmpty {
+            articles = articles.filter { article in
+                article.title.localizedCaseInsensitiveContains(query)
+                    || article.plainSummary.localizedCaseInsensitiveContains(query)
+                    || (article.author ?? "").localizedCaseInsensitiveContains(query)
+                    || (article.feed?.displayTitle ?? "").localizedCaseInsensitiveContains(query)
+            }
+        }
+        return articles
+    }
+
+    private var scopeTitle: String {
+        switch model.selection {
+        case .none, .some(.all): "All Articles"
+        case .some(.unread): "Unread"
+        case .some(.starred): "Favorites"
+        case .some(.feed(let id)): context.feed(with: id)?.displayTitle ?? "Feed"
+        }
+    }
+
+    private var expandedArticle: Article? {
+        context.article(with: model.expandedArticleID)
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        @Bindable var model = model
+        let articles = scopedArticles
+
+        ZStack {
+            palette.canvas.ignoresSafeArea()
+
+            timelineList(articles)
+                .opacity(model.isReaderExpanded ? 0 : 1)
+                .scaleEffect(model.isReaderExpanded ? 0.985 : 1, anchor: .center)
+                .allowsHitTesting(!model.isReaderExpanded)
+
+            if let article = expandedArticle {
+                ArticleReaderView(article: article)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.975, anchor: .top)),
+                            removal: .opacity.combined(with: .scale(scale: 0.99, anchor: .top))
+                        )
+                    )
+                    .zIndex(1)
+            }
+        }
+        .animation(.spring(response: 0.38, dampingFraction: 0.88), value: model.expandedArticleID)
+        .navigationTitle(model.isReaderExpanded ? "" : scopeTitle)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(model.isReaderExpanded ? .hidden : .visible, for: .navigationBar)
+        #endif
+        .toolbar { if !model.isReaderExpanded { timelineToolbar(articles) } }
+        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search Articles")
+        .onChange(of: articles.map(\.persistentModelID)) { _, ids in
+            model.visibleArticleIDs = ids
+        }
+        .onAppear { model.visibleArticleIDs = articles.map(\.persistentModelID) }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleReader)) { _ in
+            toggleReader()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleFavorite)) { _ in
+            guard let article = currentArticle else { return }
+            article.toggleStar()
+            try? context.save()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleRead)) { _ in
+            guard let article = currentArticle else { return }
+            article.isRead.toggle()
+            try? context.save()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openInBrowser)) { _ in
+            if let url = currentArticle?.url { openURL(url) }
+        }
+    }
+
+    private var currentArticle: Article? {
+        context.article(with: model.expandedArticleID ?? model.selectedArticleID)
+    }
+
+    // MARK: - List
+
+    @ViewBuilder
+    private func timelineList(_ articles: [Article]) -> some View {
+        if articles.isEmpty {
+            emptyState
+        } else {
+            let selection = Binding(
+                get: { model.selectedArticleID },
+                set: { model.selectedArticleID = $0 }
+            )
+
+            List(selection: selection) {
+                ForEach(articles) { article in
+                    ArticleRowView(
+                        article: article,
+                        showsFeedName: !isSingleFeedScope,
+                        onOpen: { model.open(article) }
+                    )
+                    .tag(article.persistentModelID)
+                    .listRowBackground(rowBackground(for: article))
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 10)
+            .refreshable { await model.refresher.refreshAll(in: context) }
+            .onKeyPress(.space) {
+                toggleReader()
+                return .handled
+            }
+            .onKeyPress(.return) {
+                toggleReader()
+                return .handled
+            }
+            .onKeyPress(characters: .alphanumerics) { press in
+                switch press.characters {
+                case "j":
+                    model.goToNext(); return .handled
+                case "k":
+                    model.goToPrevious(); return .handled
+                case "s":
+                    if let article = currentArticle { article.toggleStar(); try? context.save() }
+                    return .handled
+                default:
+                    return .ignored
+                }
+            }
+        }
+    }
+
+    private var isSingleFeedScope: Bool {
+        if case .some(.feed) = model.selection { return true }
+        return false
+    }
+
+    private func rowBackground(for article: Article) -> some View {
+        Group {
+            if article.persistentModelID == model.selectedArticleID {
+                palette.accent.opacity(0.12)
+            } else {
+                Color.clear
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if !model.searchText.trimmed.isEmpty {
+            ContentUnavailableView.search(text: model.searchText)
+        } else {
+            ContentUnavailableView {
+                Label(emptyTitle, systemImage: emptySymbol)
+            } description: {
+                Text(emptyMessage)
+            } actions: {
+                Button("Refresh") {
+                    Task { await model.refresher.refreshAll(in: context) }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private var emptyTitle: String {
+        switch model.selection {
+        case .some(.unread): "All Caught Up"
+        case .some(.starred): "No Favorites"
+        default: "Nothing Here Yet"
+        }
+    }
+
+    private var emptySymbol: String {
+        switch model.selection {
+        case .some(.unread): "checkmark.circle"
+        case .some(.starred): "star"
+        default: "leaf"
+        }
+    }
+
+    private var emptyMessage: String {
+        switch model.selection {
+        case .some(.unread): "You've read everything. Go outside."
+        case .some(.starred): "Star an article and it will be waiting here."
+        default: "Add a subscription, then pull to refresh."
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private func timelineToolbar(_ articles: [Article]) -> some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Toggle("Hide Read Articles", isOn: Binding(
+                    get: { settings.hidesReadArticles },
+                    set: { settings.hidesReadArticles = $0 }
+                ))
+                Toggle("Compact Rows", isOn: Binding(
+                    get: { settings.usesCompactRows },
+                    set: { settings.usesCompactRows = $0 }
+                ))
+                Divider()
+                Button("Mark All as Read", systemImage: "checkmark.circle") {
+                    for article in articles where !article.isRead { article.isRead = true }
+                    try? context.save()
+                }
+                #if os(iOS)
+                Divider()
+                Button("Reading Settings…", systemImage: "textformat.size") {
+                    model.isShowingSettings = true
+                }
+                #endif
+            } label: {
+                Label("View Options", systemImage: "ellipsis.circle")
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func toggleReader() {
+        if model.isReaderExpanded {
+            model.collapse()
+        } else if let article = context.article(with: model.selectedArticleID) {
+            model.open(article)
+        } else if let first = scopedArticles.first {
+            model.open(first)
+        }
+    }
+}
