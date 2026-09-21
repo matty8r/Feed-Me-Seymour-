@@ -18,6 +18,7 @@ struct SettingsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @Query private var feeds: [Feed]
+    @State private var voices: [SpeechVoice] = []
 
     private var palette: Palette { Palette(theme: settings.theme, colorScheme: colorScheme) }
     private var typography: Typography { Typography(settings: settings, dynamicTypeSize: dynamicTypeSize) }
@@ -75,6 +76,49 @@ struct SettingsView: View {
                 Toggle("Mark as read when opened", isOn: $settings.marksReadOnOpen)
             }
 
+            Section("Read Aloud") {
+                Picker("Voice", selection: Binding(
+                    get: { settings.voiceIdentifier ?? "" },
+                    set: { settings.voiceIdentifier = $0.isEmpty ? nil : $0 }
+                )) {
+                    Text("System Default").tag("")
+                    ForEach(voices) { voice in
+                        Text(voice.displayName).tag(voice.id)
+                    }
+                }
+
+                LabeledContent("Speed") {
+                    HStack(spacing: 10) {
+                        Slider(value: $settings.speechRate, in: ReaderSettings.speechRateRange, step: 0.05)
+                        Text(settings.speechRateLabel)
+                            .font(.callout.monospacedDigit())
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                    .frame(minWidth: 220)
+                }
+
+                LabeledContent("Pitch") {
+                    Slider(value: $settings.speechPitch, in: ReaderSettings.speechPitchRange, step: 0.05)
+                        .frame(minWidth: 180)
+                }
+
+                Toggle("Describe images", isOn: $settings.announcesImagesAloud)
+                Toggle("Continue to the next article", isOn: $settings.autoAdvancesSpeech)
+
+                if SpeechVoiceCatalog.canRequestPersonalVoice {
+                    Button("Allow Personal Voice…") {
+                        Task { @MainActor in
+                            _ = await SpeechVoiceCatalog.requestPersonalVoiceAccess()
+                            voices = SpeechVoiceCatalog.voices(for: nil)
+                        }
+                    }
+                }
+
+                Text("Code listings and tables are announced rather than read out. Articles in another language are read by a matching voice when one is installed.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Subscriptions") {
                 Picker("Refresh every", selection: $settings.refreshMinutes) {
                     Text("15 minutes").tag(15)
@@ -116,6 +160,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .task { voices = SpeechVoiceCatalog.voices(for: nil) }
+        .onChange(of: settings.speechRate) { _, _ in SpeechReader.shared.reapply(settings: settings) }
+        .onChange(of: settings.voiceIdentifier) { _, _ in SpeechReader.shared.reapply(settings: settings) }
         .navigationTitle("Settings")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -30,6 +30,8 @@ struct ArticleReaderView: View {
         Typography(settings: settings, dynamicTypeSize: dynamicTypeSize)
     }
 
+    private var speech: SpeechReader { .shared }
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
@@ -64,6 +66,7 @@ struct ArticleReaderView: View {
             case "j": model.goToNext(); return .handled
             case "k": model.goToPrevious(); return .handled
             case "s": toggleStar(); return .handled
+            case "l": toggleReadingAloud(); return .handled
             default: return .ignored
             }
         }
@@ -114,6 +117,15 @@ struct ArticleReaderView: View {
             Divider().frame(height: 16)
 
             StarButton(isStarred: article.isStarred, size: 16) { toggleStar() }
+
+            Button { toggleReadingAloud() } label: {
+                Image(systemName: speech.isReading(article) ? "speaker.wave.2.fill" : "speaker.wave.2")
+                    .font(.system(size: 15))
+                    .foregroundStyle(speech.isReading(article) ? palette.accent : palette.ink)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+            .help(speech.isReading(article) ? "Stop Reading Aloud" : "Read Aloud")
 
             TypographyMenu()
 
@@ -201,6 +213,14 @@ struct ArticleReaderView: View {
             .onChange(of: article.persistentModelID) { _, _ in
                 scroller.scrollTo("reader.top", anchor: .top)
             }
+            .onChange(of: speech.currentBlockID) { _, blockID in
+                // Keep the spoken paragraph on screen, but only for the article
+                // actually being read.
+                guard let blockID, speech.articleID == article.persistentModelID else { return }
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    scroller.scrollTo(blockID, anchor: .center)
+                }
+            }
         }
     }
 
@@ -238,5 +258,14 @@ struct ArticleReaderView: View {
     private func toggleStar() {
         article.toggleStar()
         try? context.save()
+    }
+
+    private func toggleReadingAloud() {
+        if speech.isReading(article) {
+            speech.stop()
+        } else {
+            // The render cache means this costs nothing the second time.
+            speech.start(article: article, rendered: ArticleRenderer.shared.render(article), settings: settings)
+        }
     }
 }

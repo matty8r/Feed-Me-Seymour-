@@ -27,6 +27,7 @@ struct ArticleBodyView: View {
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
+                    .id(block.id)
             }
         }
         .padding(.top, 8)
@@ -65,13 +66,7 @@ struct BlockView: View {
     private var content: some View {
         switch block.kind {
         case .paragraph(let text):
-            Text(text)
-                .font(typography.body)
-                .lineSpacing(typography.bodyLineSpacing)
-                .foregroundStyle(palette.ink)
-                .tint(palette.accent)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            ParagraphView(text: text, blockID: block.id)
 
         case .heading(let level, let text):
             Text(text)
@@ -121,6 +116,54 @@ struct BlockView: View {
         case .separator:
             Ornament()
         }
+    }
+}
+
+/// A paragraph, plus the word being spoken when this is the block being read.
+///
+/// The guard short-circuits, so a paragraph that isn't currently being read
+/// never touches `spokenRange` and therefore never re-renders on a word
+/// boundary — only the one paragraph being spoken does.
+struct ParagraphView: View {
+
+    let text: AttributedString
+    let blockID: UUID
+
+    @Environment(\.typography) private var typography
+    @Environment(\.palette) private var palette
+
+    private var speech: SpeechReader { .shared }
+
+    var body: some View {
+        Text(rendered)
+            .font(typography.body)
+            .lineSpacing(typography.bodyLineSpacing)
+            .foregroundStyle(palette.ink)
+            .tint(palette.accent)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var rendered: AttributedString {
+        guard speech.currentBlockID == blockID, let range = speech.spokenRange else { return text }
+        return text.highlightingCharacters(in: range, with: palette.accent.opacity(0.22))
+    }
+}
+
+extension AttributedString {
+    /// `range` is in characters, which is what the speech reader converts
+    /// `NSRange` into — mixing UTF-16 offsets in here would misplace the
+    /// highlight on any paragraph containing an emoji or a combining mark.
+    func highlightingCharacters(in range: Range<Int>, with color: Color) -> AttributedString {
+        let length = characters.count
+        guard range.lowerBound >= 0, range.upperBound <= length, range.lowerBound < range.upperBound else {
+            return self
+        }
+        var copy = self
+        let start = copy.index(copy.startIndex, offsetByCharacters: range.lowerBound)
+        let end = copy.index(copy.startIndex, offsetByCharacters: range.upperBound)
+        copy[start..<end].backgroundColor = color
+        return copy
     }
 }
 

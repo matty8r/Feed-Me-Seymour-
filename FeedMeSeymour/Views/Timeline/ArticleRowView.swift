@@ -177,6 +177,13 @@ struct ArticleRowView: View {
     @ViewBuilder
     private var menu: some View {
         Button("Read", systemImage: "book") { onOpen() }
+        Button("Read Aloud", systemImage: "speaker.wave.2") {
+            SpeechReader.shared.start(
+                article: article,
+                rendered: ArticleRenderer.shared.render(article),
+                settings: settings
+            )
+        }
         Button(article.isStarred ? "Remove from Favorites" : "Add to Favorites", systemImage: article.isStarred ? "star.slash" : "star") {
             article.toggleStar()
             try? context.save()

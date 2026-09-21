@@ -2,14 +2,14 @@
 //  AudioPlayback.swift
 //  Feed Me, Seymour!
 //
-//  One audio player for the whole app, wired into the system's Now Playing
-//  controls so a podcast enclosure behaves like a podcast: Control Center,
-//  the Lock Screen, AirPods pinches and media keys all work.
+//  One audio player for the whole app, so a podcast enclosure behaves like a
+//  podcast. The Lock Screen, Control Center, media keys and AirPods are
+//  arbitrated by `NowPlayingCenter`, which this shares with the speech reader —
+//  only one of them can own the transport at a time.
 //
 
 import Foundation
 import AVFoundation
-import MediaPlayer
 import Observation
 
 #if os(iOS)
@@ -34,14 +34,13 @@ final class AudioPlaybackController {
         didSet {
             guard isPlaying else { return }
             player?.rate = rate
-            updateNowPlaying()
+            publishProgress()
         }
     }
 
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
-    @ObservationIgnored private var hasConfiguredRemoteCommands = false
 
     private init() {}
 
@@ -59,8 +58,7 @@ final class AudioPlaybackController {
 
     func start(_ media: AudioMedia, artworkURL: URL? = nil, feedTitle: String? = nil) {
         teardown()
-        configureSession()
-        configureRemoteCommands()
+        AudioSession.activatePlayback()
 
         let item = AVPlayerItem(url: media.url)
         let player = AVPlayer(playerItem: item)
@@ -77,7 +75,7 @@ final class AudioPlaybackController {
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main
         ) { [weak self] time in
-            MainActor.assumeIsolated {
+            Task { @MainActor in
                 guard let self else { return }
                 self.currentTime = time.seconds
                 if let itemDuration = self.player?.currentItem?.duration.seconds,
@@ -85,7 +83,7 @@ final class AudioPlaybackController {
                     self.duration = itemDuration
                     self.isLoading = false
                 }
-                self.updateNowPlaying()
+                self.publishProgress()
             }
         }
 
@@ -94,29 +92,36 @@ final class AudioPlaybackController {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.finish()
-            }
+            Task { @MainActor in self?.finish() }
         }
 
         player.rate = rate
         isPlaying = true
-        loadArtwork(artworkURL ?? media.artworkURL)
-        updateNowPlaying()
+
+        NowPlayingCenter.shared.activate(
+            self,
+            title: currentTitle ?? "Audio",
+            artist: feedTitle,
+            artworkURL: artworkURL ?? media.artworkURL
+        )
+        publishProgress()
     }
 
     func resume() {
         guard let player else { return }
-        configureSession()
+        AudioSession.activatePlayback()
         player.rate = rate
         isPlaying = true
-        updateNowPlaying()
+        if NowPlayingCenter.shared.activeSource !== self {
+            NowPlayingCenter.shared.activate(self, title: currentTitle ?? "Audio", artist: nil)
+        }
+        publishProgress()
     }
 
     func pause() {
         player?.pause()
         isPlaying = false
-        updateNowPlaying()
+        publishProgress()
     }
 
     func stop() {
@@ -126,7 +131,7 @@ final class AudioPlaybackController {
         isPlaying = false
         currentTime = 0
         duration = 0
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        NowPlayingCenter.shared.resign(self)
     }
 
     func seek(to seconds: Double) {
@@ -134,7 +139,7 @@ final class AudioPlaybackController {
         let clamped = max(0, duration > 0 ? min(seconds, duration) : seconds)
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         currentTime = clamped
-        updateNowPlaying()
+        publishProgress()
     }
 
     func skip(by delta: Double) {
@@ -144,7 +149,7 @@ final class AudioPlaybackController {
     private func finish() {
         isPlaying = false
         currentTime = duration
-        updateNowPlaying()
+        publishProgress()
     }
 
     private func teardown() {
@@ -156,78 +161,28 @@ final class AudioPlaybackController {
         player = nil
     }
 
-    // MARK: - System integration
-
-    private func configureSession() {
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .spokenAudio, policy: .longFormAudio)
-        try? session.setActive(true)
-        #endif
+    private func publishProgress() {
+        NowPlayingCenter.shared.update(
+            elapsed: currentTime,
+            duration: duration > 0 ? duration : nil,
+            rate: isPlaying ? Double(rate) : 0,
+            for: self
+        )
     }
+}
 
-    private func configureRemoteCommands() {
-        guard !hasConfiguredRemoteCommands else { return }
-        hasConfiguredRemoteCommands = true
+// MARK: - Now Playing
 
-        // Command handlers arrive on an unspecified queue, so hop deliberately.
-        let center = MPRemoteCommandCenter.shared()
-        center.playCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.resume() }
-            return .success
-        }
-        center.pauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.pause() }
-            return .success
-        }
-        center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.isPlaying ? self.pause() : self.resume()
-            }
-            return .success
-        }
-        center.skipForwardCommand.preferredIntervals = [30]
-        center.skipForwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.skip(by: 30) }
-            return .success
-        }
-        center.skipBackwardCommand.preferredIntervals = [15]
-        center.skipBackwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.skip(by: -15) }
-            return .success
-        }
-        center.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
-            let position = event.positionTime
-            Task { @MainActor in self?.seek(to: position) }
-            return .success
-        }
-    }
+extension AudioPlaybackController: NowPlayingSource {
+    var nowPlayingIsPlaying: Bool { isPlaying }
+    var nowPlayingSupportsSeeking: Bool { true }
 
-    private func updateNowPlaying() {
-        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-        info[MPMediaItemPropertyTitle] = currentTitle ?? "Audio"
-        info[MPMediaItemPropertyArtist] = "Feed Me, Seymour!"
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? Double(rate) : 0.0
-        if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-    }
-
-    private func loadArtwork(_ url: URL?) {
-        guard let url else { return }
-        Task { [weak self] in
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let image = PlatformImage(data: data) else { return }
-            await MainActor.run {
-                guard self != nil else { return }
-                var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-            }
-        }
-    }
+    func nowPlayingPlay() { resume() }
+    func nowPlayingPause() { pause() }
+    func nowPlayingNext() { skip(by: 30) }
+    func nowPlayingPrevious() { skip(by: -15) }
+    func nowPlayingSeek(to seconds: Double) { seek(to: seconds) }
+    func nowPlayingWasSuperseded() { pause() }
 }
 
 extension Double {

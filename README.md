@@ -32,6 +32,46 @@ real typography and the media real media:
 - **Sharing.** `ShareLink` everywhere: rows, the reader, images, audio, embeds,
   and in every context menu. Plus copy link and open in browser.
 
+## Read aloud
+
+Press `L` in the reader (or `⌘⇧L`, or the speaker button) and the article is
+read to you by `AVSpeechSynthesizer`. The current paragraph scrolls itself into
+view and the word being spoken is highlighted as it goes.
+
+This is the second payoff for not using a web view. Because the article is
+already a list of typed blocks, the script knows what it's looking at:
+
+- **Code listings and tables are announced, not read.** "Swift code sample."
+  "Table with 4 rows." Nobody wants a synthesizer reading braces aloud.
+- **Images are described** from their caption or alt text, so you get what a
+  sighted reader gets. Undescribed images are passed over rather than announced
+  as nothing.
+- **Video, audio and embeds are announced**, so a gap in the narration has an
+  explanation.
+- **Ordered lists are numbered aloud**, headings get a pause before them,
+  quotations are followed by their attribution, and a section break becomes
+  silence rather than a spoken word.
+- **Language is detected** from the opening paragraphs, so a French article is
+  read by a French voice when one is installed — the chosen voice is only
+  overridden when it plainly doesn't match.
+
+Each segment is its own `AVSpeechUtterance`, which is what makes it possible to
+pause at a sensible place, skip by paragraph, and know which block is being
+spoken. Word highlighting maps the synthesizer's UTF-16 `NSRange` onto character
+offsets before touching the rendered `AttributedString`, so it lands correctly
+in paragraphs containing emoji or combining marks.
+
+The transport lives at the root of the window rather than inside the reader, so
+closing the article never leaves a voice you can't stop. Voice, speed, pitch and
+Personal Voice (iOS 17+) are in the bar's menu and in Settings. Turn on
+**Continue to the next article** for hands-free listening down the timeline.
+
+Reading aloud and podcast playback both want the Lock Screen, Control Center and
+your AirPods, so neither owns them: `NowPlayingCenter` arbitrates, and whichever
+started last takes the controls. Speech offers next/previous *paragraph* where
+audio offers skip and scrub, because paragraphs are the only honest unit when a
+synthesizer sets the pace.
+
 No account, no analytics, no server in the middle — feeds are fetched straight
 from their publishers.
 
@@ -97,10 +137,12 @@ room. Replace them with your own, or import an OPML file (`⌘⇧I`).
 | `↑` `↓` | Move through the timeline |
 | `J` / `K` | Next / previous article |
 | `S` | Favorite |
+| `L` | Read the article aloud |
 | `Esc` | Close the reader |
 | `⌘R` | Refresh all subscriptions |
 | `⌘⇧N` | Add a subscription |
 | `⌘⇧S` | Toggle favorite |
+| `⌘⇧L` | Read aloud |
 | `⌘⇧U` | Toggle read |
 | `⌘+` `⌘-` `⌘0` | Text size |
 | `⌘⇧K` | Mark all as read |
@@ -118,7 +160,7 @@ FeedMeSeymour/
     Sync/       CloudKit mirror records and the reconcile pass
   Design/       Typography, Palette, ReaderSettings
   Views/        Sidebar, Timeline, Reader
-  Media/        AVKit video, audio playback, animated images, embeds, lightbox
+  Media/        AVKit video, audio playback, speech, animated images, embeds, lightbox
 FeedMeSeymourTests/
 ```
 
@@ -141,6 +183,8 @@ Notable pieces:
   main actor. Old entries are pruned; favorites never are.
 - **`SyncCoordinator`** reconciles the local store against the iCloud mirror —
   see [iCloud sync](#icloud-sync) above.
+- **`SpeechScript`** turns parsed blocks into something worth listening to, and
+  **`SpeechReader`** drives the synthesizer — see [Read aloud](#read-aloud).
 
 ## Tests
 
@@ -156,7 +200,9 @@ the HTML-to-blocks layer (emphasis, links, entities, lists, tables, figures,
 galleries, lazy images, video source selection, embeds, code blocks, and
 deliberately malformed markup), and the sync reconcile pass (adoption,
 tombstones, re-subscription, rename conflicts in both directions, duplicate
-mirrors, placeholder favorites and state expiry) against an in-memory store.
+mirrors, placeholder favorites and state expiry) against an in-memory store, and
+the read-aloud script (verbatim paragraphs, announced code and tables, described
+images, numbered lists, separator pauses, rate clamping and language detection).
 
 ## Known limits
 
@@ -169,5 +215,8 @@ mirrors, placeholder favorites and state expiry) against an in-memory store.
   retention cap; it would want a predicate-based pass before that grows.
 - "Mark all as read" on a large store creates one cloud record per article in
   the following reconcile. Bounded by the 60-day expiry, but it is a burst.
+- Changing voice or speed mid-article restarts from the current paragraph.
+  `AVSpeechSynthesizer` can't re-rate an utterance already queued.
+- Read-aloud position isn't restored across launches, and isn't synced.
 - The project builds in Swift 5 language mode with minimal concurrency checking.
   Moving to Swift 6 is a worthwhile follow-up.

@@ -122,6 +122,15 @@ struct TimelinePane: View {
         .onReceive(NotificationCenter.default.publisher(for: .openInBrowser)) { _ in
             if let url = currentArticle?.url { openURL(url) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .readAloud)) { _ in
+            guard let article = currentArticle else { return }
+            let speech = SpeechReader.shared
+            if speech.isReading(article) {
+                speech.stop()
+            } else {
+                speech.start(article: article, rendered: ArticleRenderer.shared.render(article), settings: settings)
+            }
+        }
     }
 
     private var currentArticle: Article? {

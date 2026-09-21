@@ -26,6 +26,8 @@ struct RootView: View {
         Palette(theme: settings.theme, colorScheme: colorScheme)
     }
 
+    private var speech: SpeechReader { .shared }
+
     var body: some View {
         @Bindable var model = model
 
@@ -40,7 +42,15 @@ struct RootView: View {
         .tint(palette.accent)
         .preferredColorScheme(settings.theme.forcedColorScheme)
         .background(palette.canvas)
-        .overlay(alignment: .bottom) { statusBanner }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 10) {
+                statusBanner
+                SpeechBar()
+                    .environment(settings)
+                    .environment(\.palette, palette)
+            }
+            .animation(.spring(response: 0.36, dampingFraction: 0.86), value: speech.isActive)
+        }
         .sheet(isPresented: $model.isShowingAddSubscription) {
             AddSubscriptionView()
                 .environment(model)
@@ -70,6 +80,9 @@ struct RootView: View {
         }
         .onChange(of: model.refresher.lastErrorMessage) { _, message in
             if let message { model.showStatus(message) }
+        }
+        .onChange(of: speech.finishedCount) { _, _ in
+            advanceReadingAloud()
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -131,6 +144,20 @@ struct RootView: View {
 
         Persistence.seedIfEmpty(context)
         await refreshIfStale()
+    }
+
+    /// Hands-free listening: when an article finishes, move to the next one in
+    /// the timeline and keep going. Works whether or not the reader is open.
+    private func advanceReadingAloud() {
+        guard settings.autoAdvancesSpeech,
+              let nextID = model.goToNext(),
+              let next = context.article(with: nextID) else { return }
+
+        if model.isReaderExpanded { model.expandedArticleID = nextID }
+        if settings.marksReadOnOpen { next.setRead(true) }
+        try? context.save()
+
+        speech.start(article: next, rendered: ArticleRenderer.shared.render(next), settings: settings)
     }
 
     private func synchronize() async {

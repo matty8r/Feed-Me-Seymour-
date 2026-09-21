@@ -104,10 +104,17 @@ final class ReaderSettings {
         static let refreshMinutes = "reader.refreshMinutes"
         static let compactRows = "timeline.compactRows"
         static let hidesRead = "timeline.hidesRead"
+        static let voice = "speech.voice"
+        static let speechRate = "speech.rate"
+        static let speechPitch = "speech.pitch"
+        static let announcesImages = "speech.announcesImages"
+        static let autoAdvances = "speech.autoAdvances"
     }
 
     static let sizeRange: ClosedRange<Double> = 15...26
     static let lineHeightRange: ClosedRange<Double> = 1.35...1.9
+    static let speechRateRange: ClosedRange<Double> = 0.5...2.0
+    static let speechPitchRange: ClosedRange<Double> = 0.75...1.25
 
     var face: ReadingFace { didSet { store(face.rawValue, Key.face) } }
     var measure: ReadingMeasure { didSet { store(measure.rawValue, Key.measure) } }
@@ -119,6 +126,21 @@ final class ReaderSettings {
     var refreshMinutes: Int { didSet { store(refreshMinutes, Key.refreshMinutes) } }
     var usesCompactRows: Bool { didSet { store(usesCompactRows, Key.compactRows) } }
     var hidesReadArticles: Bool { didSet { store(hidesReadArticles, Key.hidesRead) } }
+
+    /// Read aloud
+    var voiceIdentifier: String? {
+        didSet {
+            if let voiceIdentifier {
+                defaults.set(voiceIdentifier, forKey: Key.voice)
+            } else {
+                defaults.removeObject(forKey: Key.voice)
+            }
+        }
+    }
+    var speechRate: Double { didSet { store(speechRate, Key.speechRate) } }
+    var speechPitch: Double { didSet { store(speechPitch, Key.speechPitch) } }
+    var announcesImagesAloud: Bool { didSet { store(announcesImagesAloud, Key.announcesImages) } }
+    var autoAdvancesSpeech: Bool { didSet { store(autoAdvancesSpeech, Key.autoAdvances) } }
 
     private let defaults: UserDefaults
 
@@ -134,6 +156,11 @@ final class ReaderSettings {
         refreshMinutes = defaults.object(forKey: Key.refreshMinutes) as? Int ?? 30
         usesCompactRows = defaults.object(forKey: Key.compactRows) as? Bool ?? false
         hidesReadArticles = defaults.object(forKey: Key.hidesRead) as? Bool ?? false
+        voiceIdentifier = defaults.string(forKey: Key.voice)
+        speechRate = defaults.object(forKey: Key.speechRate) as? Double ?? 1.0
+        speechPitch = defaults.object(forKey: Key.speechPitch) as? Double ?? 1.0
+        announcesImagesAloud = defaults.object(forKey: Key.announcesImages) as? Bool ?? true
+        autoAdvancesSpeech = defaults.object(forKey: Key.autoAdvances) as? Bool ?? false
     }
 
     private func store(_ value: Any, _ key: String) {
@@ -153,4 +180,12 @@ final class ReaderSettings {
 
     var canGrow: Bool { baseSize < Self.sizeRange.upperBound }
     var canShrink: Bool { baseSize > Self.sizeRange.lowerBound }
+
+    func nudgeSpeechRate(by delta: Double) {
+        speechRate = min(max(speechRate + delta, Self.speechRateRange.lowerBound), Self.speechRateRange.upperBound)
+    }
+
+    var speechRateLabel: String {
+        speechRate.formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
 }

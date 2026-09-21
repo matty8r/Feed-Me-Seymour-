@@ -49,6 +49,11 @@ struct FeedMeCommands: Commands {
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
 
+            Button("Read Aloud") {
+                NotificationCenter.default.post(name: .readAloud, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+
             Button("Toggle Read") {
                 NotificationCenter.default.post(name: .toggleRead, object: nil)
             }
@@ -106,6 +111,7 @@ extension Notification.Name {
     static let toggleFavorite = Notification.Name("FeedMe.toggleFavorite")
     static let toggleRead = Notification.Name("FeedMe.toggleRead")
     static let openInBrowser = Notification.Name("FeedMe.openInBrowser")
+    static let readAloud = Notification.Name("FeedMe.readAloud")
     static let refreshAll = Notification.Name("FeedMe.refreshAll")
     static let markAllRead = Notification.Name("FeedMe.markAllRead")
 }
