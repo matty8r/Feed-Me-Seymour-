@@ -53,17 +53,8 @@ struct ArticleReaderView: View {
             render()
         }
         .onChange(of: article.contentHTML) { _, _ in render() }
-        // Up and down keep meaning "the article before / after this one"
-        // once the reader is open, so a run down the timeline doesn't have to
-        // drop back out to the list between pieces.
-        .onKeyPress(.upArrow) {
-            model.goToPrevious()
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            model.goToNext()
-            return .handled
-        }
+        // Arrows are left to the scroll view here: inside an article they
+        // mean "move down the page". J and K are what walk the timeline.
         .onKeyPress(.escape) {
             model.collapse()
             return .handled
