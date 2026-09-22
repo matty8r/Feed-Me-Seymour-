@@ -7,15 +7,30 @@
 
 import SwiftUI
 
+/// The `aA` control as its own button in the bar.
 struct TypographyMenu: View {
+    var body: some View {
+        Menu {
+            TypographyMenuItems()
+        } label: {
+            Image(systemName: "textformat").barGlyph()
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Reading Settings")
+    }
+}
+
+/// The same controls as menu rows, so they can also hang off the overflow menu
+/// where the bar is too narrow to spend a slot on them.
+struct TypographyMenuItems: View {
 
     @Environment(ReaderSettings.self) private var settings
-    @Environment(\.palette) private var palette
 
     var body: some View {
         @Bindable var settings = settings
 
-        Menu {
+        Group {
             Section("Text Size") {
                 Button("Bigger", systemImage: "textformat.size.larger") { settings.nudgeSize(by: 1) }
                     .disabled(!settings.canGrow)
@@ -46,12 +61,6 @@ struct TypographyMenu: View {
 
             Toggle("Show Images", isOn: $settings.showsImages)
             Toggle("Mark Read When Opened", isOn: $settings.marksReadOnOpen)
-        } label: {
-            Image(systemName: "textformat")
-                .font(.system(size: 15, weight: .medium))
         }
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Reading Settings")
     }
 }

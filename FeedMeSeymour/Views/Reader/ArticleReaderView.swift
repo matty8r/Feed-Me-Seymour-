@@ -76,13 +76,13 @@ struct ArticleReaderView: View {
     // MARK: - Chrome
 
     private var toolbar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
             Button {
                 model.collapse()
             } label: {
                 Label("Back to Timeline", systemImage: Platform.isMac ? "chevron.left" : "chevron.down")
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 15, weight: .semibold))
+                    .closeGlyph()
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
@@ -96,65 +96,85 @@ struct ArticleReaderView: View {
                         .lineLimit(1)
                 }
                 .foregroundStyle(palette.secondaryInk)
+                .padding(.leading, 2)
             }
 
             Spacer(minLength: 8)
 
-            Button { model.goToPrevious() } label: {
-                Image(systemName: "chevron.up").font(.system(size: 13, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.canGoToPrevious)
-            .help("Previous Article")
-
-            Button { model.goToNext() } label: {
-                Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.canGoToNext)
-            .help("Next Article")
-
-            Divider().frame(height: 16)
-
-            StarButton(isStarred: article.isStarred, size: 16) { toggleStar() }
-
-            Button { toggleReadingAloud() } label: {
-                Image(systemName: speech.isReading(article) ? "speaker.wave.2.fill" : "speaker.wave.2")
-                    .font(.system(size: 15))
-                    .foregroundStyle(speech.isReading(article) ? palette.accent : palette.ink)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.plain)
-            .help(speech.isReading(article) ? "Stop Reading Aloud" : "Read Aloud")
-
-            TypographyMenu()
-
-            if let url = article.url {
-                Menu {
-                    Button("Open in Browser", systemImage: "safari") { openURL(url) }
-                    Button("Copy Link", systemImage: "link") { Platform.copyToPasteboard(url.absoluteString) }
-                    Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
-                        article.setRead(!article.isRead)
-                        try? context.save()
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle").font(.system(size: 15))
-                }
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("More")
-
-                ShareLink(item: url, subject: Text(article.displayTitle), message: shareMessage) {
-                    Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .medium))
+            // Four actions earn a place in the bar: where you are going, and
+            // what you do with the article once you're there. Everything else
+            // is one tap away under the ellipsis.
+            HStack(spacing: 0) {
+                Button { model.goToPrevious() } label: {
+                    Image(systemName: "chevron.up").barGlyph()
                 }
                 .buttonStyle(.plain)
-                .help("Share Article")
+                .disabled(!model.canGoToPrevious)
+                .help("Previous Article")
+
+                Button { model.goToNext() } label: {
+                    Image(systemName: "chevron.down").barGlyph()
+                }
+                .buttonStyle(.plain)
+                .disabled(!model.canGoToNext)
+                .help("Next Article")
+
+                Divider()
+                    .frame(height: 16)
+                    .padding(.horizontal, 6)
+
+                StarButton(isStarred: article.isStarred, size: BarGlyph.size, idleTint: \.ink) {
+                    toggleStar()
+                }
+                .frame(width: BarGlyph.hit.width, height: BarGlyph.hit.height)
+
+                if let url = article.url {
+                    ShareLink(item: url, subject: Text(article.displayTitle), message: shareMessage) {
+                        Image(systemName: "square.and.arrow.up").barGlyph()
+                    }
+                    .buttonStyle(.plain)
+                    .help("Share Article")
+                }
+
+                overflowMenu
             }
         }
         .foregroundStyle(palette.ink)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background(palette.paper)
+    }
+
+    private var overflowMenu: some View {
+        Menu {
+            Button(speech.isReading(article) ? "Stop Reading Aloud" : "Read Aloud",
+                   systemImage: speech.isReading(article) ? "speaker.slash" : "speaker.wave.2") {
+                toggleReadingAloud()
+            }
+
+            Menu("Text", systemImage: "textformat") {
+                TypographyMenuItems()
+            }
+
+            Divider()
+
+            Button(article.isRead ? "Mark as Unread" : "Mark as Read",
+                   systemImage: article.isRead ? "circle" : "checkmark.circle") {
+                article.setRead(!article.isRead)
+                try? context.save()
+            }
+
+            if let url = article.url {
+                Divider()
+                Button("Open in Browser", systemImage: "safari") { openURL(url) }
+                Button("Copy Link", systemImage: "link") { Platform.copyToPasteboard(url.absoluteString) }
+            }
+        } label: {
+            Image(systemName: "ellipsis").barGlyph()
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More")
     }
 
     private var shareMessage: Text? {
@@ -210,6 +230,12 @@ struct ArticleReaderView: View {
             } action: { _, progress in
                 scrollProgress = progress
             }
+            .overscrollArticleNavigation(
+                next: overscrollDestination(for: model.nextArticleID),
+                previous: overscrollDestination(for: model.previousArticleID),
+                goToNext: { model.goToNext() },
+                goToPrevious: { model.goToPrevious() }
+            )
             .onChange(of: article.persistentModelID) { _, _ in
                 scroller.scrollTo("reader.top", anchor: .top)
             }
@@ -246,6 +272,13 @@ struct ArticleReaderView: View {
     }
 
     // MARK: - Actions
+
+    /// The title the pull indicator promises. Nil at either end of the
+    /// timeline, which is what hides the indicator entirely.
+    private func overscrollDestination(for id: PersistentIdentifier?) -> OverscrollDestination? {
+        guard let article = context.article(with: id) else { return nil }
+        return OverscrollDestination(title: article.displayTitle)
+    }
 
     private func render() {
         rendered = ArticleRenderer.shared.render(article)

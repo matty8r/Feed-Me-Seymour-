@@ -13,6 +13,9 @@ struct StarButton: View {
     let isStarred: Bool
     var size: Double = 15
     var showsLabel = false
+    /// What the star looks like when it isn't lit. Faint on a timeline row,
+    /// but full strength in a bar, where it sits among its peers.
+    var idleTint: KeyPath<Palette, Color> = \.tertiaryInk
     let action: () -> Void
 
     @Environment(\.palette) private var palette
@@ -27,7 +30,7 @@ struct StarButton: View {
             HStack(spacing: 6) {
                 Image(systemName: isStarred ? "star.fill" : "star")
                     .font(.system(size: size, weight: .medium))
-                    .foregroundStyle(isStarred ? palette.favorite : palette.tertiaryInk)
+                    .foregroundStyle(isStarred ? palette.favorite : palette[keyPath: idleTint])
                     .contentTransition(.symbolEffect(.replace))
                     .scaleEffect(isPopping ? 1.3 : 1)
                 if showsLabel {

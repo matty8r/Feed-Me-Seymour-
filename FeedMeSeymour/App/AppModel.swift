@@ -118,6 +118,17 @@ final class AppModel {
         return index > 0
     }
 
+    /// What the reader would land on, for the pull-to-navigate indicator.
+    var nextArticleID: PersistentIdentifier? {
+        guard let index = selectedIndex else { return visibleArticleIDs.first }
+        return index + 1 < visibleArticleIDs.count ? visibleArticleIDs[index + 1] : nil
+    }
+
+    var previousArticleID: PersistentIdentifier? {
+        guard let index = selectedIndex, index > 0 else { return nil }
+        return visibleArticleIDs[index - 1]
+    }
+
     @discardableResult
     func goToNext() -> PersistentIdentifier? {
         let next: PersistentIdentifier?

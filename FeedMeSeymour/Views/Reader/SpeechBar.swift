@@ -30,11 +30,11 @@ struct SpeechBar: View {
                 .tint(palette.accent)
                 .frame(height: 2)
 
-            HStack(spacing: 14) {
+            HStack(spacing: 0) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(palette.accent)
                     .symbolEffect(.variableColor.iterative, isActive: speech.isSpeaking && !speech.isPaused)
+                    .barGlyph()
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(speech.articleTitle)
@@ -46,15 +46,18 @@ struct SpeechBar: View {
                         .foregroundStyle(palette.tertiaryInk)
                         .monospacedDigit()
                 }
+                .padding(.leading, 2)
 
-                Spacer(minLength: 6)
+                Spacer(minLength: 8)
 
                 Button { speech.skipBackward() } label: {
-                    Image(systemName: "backward.end.fill").font(.system(size: 13))
+                    Image(systemName: "backward.end.fill").barGlyph()
                 }
                 .buttonStyle(.plain)
                 .help("Previous Paragraph")
 
+                // The one glyph in either bar that breaks the rule, on
+                // purpose: it is the primary action of the transport.
                 Button { speech.toggle() } label: {
                     ZStack {
                         Circle().fill(palette.accent)
@@ -63,13 +66,14 @@ struct SpeechBar: View {
                             .foregroundStyle(.white)
                             .contentTransition(.symbolEffect(.replace))
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: BarGlyph.hit.height, height: BarGlyph.hit.height)
+                    .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .help(speech.isPaused ? "Resume" : "Pause")
 
                 Button { speech.skipForward() } label: {
-                    Image(systemName: "forward.end.fill").font(.system(size: 13))
+                    Image(systemName: "forward.end.fill").barGlyph()
                 }
                 .buttonStyle(.plain)
                 .help("Next Paragraph")
@@ -77,14 +81,14 @@ struct SpeechBar: View {
                 SpeechVoiceMenu()
 
                 Button { speech.stop() } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "xmark").barGlyph()
                 }
                 .buttonStyle(.plain)
                 .help("Stop Reading")
             }
             .foregroundStyle(palette.ink)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
         }
         .background(.regularMaterial)
         .overlay(alignment: .top) { Hairline() }
@@ -163,8 +167,7 @@ struct SpeechVoiceMenu: View {
                 .disabled(isRequestingPersonalVoice)
             }
         } label: {
-            Image(systemName: "person.wave.2")
-                .font(.system(size: 14))
+            Image(systemName: "person.wave.2").barGlyph()
         }
         .menuIndicator(.hidden)
         .fixedSize()
