@@ -29,6 +29,10 @@ struct ArticleRowView: View {
         return article.attachments.first(where: { $0.kind == .image })?.url
     }
 
+    /// A square, so a column of rows has a straight edge down the right
+    /// whatever shape the pictures themselves are.
+    private var thumbnailSide: CGFloat { isCompact ? 54 : 84 }
+
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             unreadDot
@@ -39,16 +43,25 @@ struct ArticleRowView: View {
                 if !isCompact { dek }
                 footer
             }
+            // Claim the space the thumbnail doesn't, so the text lays out
+            // against a known width instead of against the picture.
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if let thumbnailURL {
+                // A plain fixed square. Letting it track the row height instead
+                // — maxHeight .infinity with a 1:1 ratio — makes it flexible on
+                // both axes, and an HStack hands a view like that the whole row.
                 RemoteImage(url: thumbnailURL, contentMode: .fill, cornerRadius: 8)
-                    .frame(width: isCompact ? 54 : 78, height: isCompact ? 54 : 78)
+                    .frame(width: thumbnailSide, height: thumbnailSide)
                     .overlay {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .strokeBorder(palette.rule, lineWidth: 0.5)
                     }
+                    .padding(.leading, 2)
             }
         }
+        // So a one-line row is still tall enough to seat the square.
+        .frame(minHeight: thumbnailURL == nil ? 0 : thumbnailSide)
         .padding(.vertical, isCompact ? 8 : 12)
         .padding(.horizontal, 4)
         .contentShape(Rectangle())

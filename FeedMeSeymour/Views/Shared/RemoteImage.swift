@@ -23,15 +23,35 @@ struct RemoteImage: View {
     }
 
     var body: some View {
-        Group {
-            if isAnimated, let url {
-                AnimatedImageView(url: url, contentMode: contentMode)
-            } else {
-                staticImage
-            }
+        sized
+            // A .fill image scales past the frame on its short axis — that is
+            // the point of filling. Without this it isn't cropped, it just
+            // draws over whatever is beside it.
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    /// Only impose a ratio when the caller knows one. Asking for
+    /// `.aspectRatio(nil, contentMode: .fill)` lets the loaded image report its
+    /// own proportions as the layout size, so a square placeholder becomes a
+    /// wide photo the moment it arrives, and the frame around it no longer
+    /// describes what's drawn.
+    @ViewBuilder
+    private var sized: some View {
+        if let aspectRatio {
+            content.aspectRatio(CGFloat(aspectRatio), contentMode: contentMode)
+        } else {
+            content
         }
-        .aspectRatio(aspectRatio.map { CGFloat($0) }, contentMode: contentMode)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isAnimated, let url {
+            AnimatedImageView(url: url, contentMode: contentMode)
+        } else {
+            staticImage
+        }
     }
 
     @ViewBuilder
