@@ -70,7 +70,7 @@ struct ArticleContentTests {
             return
         }
         #expect(inner.count == 1)
-        #expect(String(attribution?.characters ?? "") == "Audrey II")
+        #expect(attribution.map { String($0.characters) } == "Audrey II")
         #expect(blocks.contains { if case .separator = $0.kind { return true } else { return false } })
     }
 
@@ -108,7 +108,7 @@ struct ArticleContentTests {
         }
         #expect(image.url.absoluteString == "https://example.com/post/large.jpg")
         #expect(image.altText == "A plant")
-        #expect(String(image.caption?.characters ?? "") == "Mean green mother")
+        #expect(image.caption.map { String($0.characters) } == "Mean green mother")
         #expect(image.aspectRatio == 1600.0 / 900.0)
     }
 
