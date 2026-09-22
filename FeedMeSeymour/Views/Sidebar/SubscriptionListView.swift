@@ -34,7 +34,18 @@ struct SubscriptionListView: View {
     var body: some View {
         @Bindable var model = model
 
-        List(selection: $model.selection) {
+        // Through select(_:) rather than binding straight at model.selection:
+        // picking a different feed has to put the reader away, or you change
+        // feeds and stay staring at an article from the old one.
+        let selection = Binding<FeedSelection?>(
+            get: { model.selection },
+            set: { new in
+                guard new != model.selection else { return }
+                model.select(new)
+            }
+        )
+
+        List(selection: selection) {
             Section {
                 collectionRow(.all, title: "All Articles", symbol: "tray.full", count: nil)
                 collectionRow(.unread, title: "Unread", symbol: "circle.inset.filled", count: totalUnread)

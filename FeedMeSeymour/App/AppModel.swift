@@ -48,7 +48,17 @@ final class AppModel {
     var sidebarTab: SidebarTab = .subscriptions
     /// Optional so that iPhone starts on the sidebar instead of pushing a list
     /// the reader never asked for.
-    var selection: FeedSelection? = Platform.isPhone ? nil : .all
+    var selection: FeedSelection? = Platform.isPhone ? nil : .all {
+        didSet {
+            // Changing what you're looking at puts the reader away, wherever
+            // the change came from. Leaving this to callers meant the sidebar's
+            // own List binding quietly skipped it, and you'd switch feeds while
+            // still staring at an article from the last one.
+            guard oldValue != selection else { return }
+            expandedArticleID = nil
+            selectedArticleID = nil
+        }
+    }
     var columnVisibility: NavigationSplitViewVisibility = .all
 
     // Timeline
@@ -154,10 +164,10 @@ final class AppModel {
 
     // MARK: - Selection helpers
 
+    /// Kept for call sites that read better with a verb; the clearing is in
+    /// `selection`'s observer so no path can miss it.
     func select(_ selection: FeedSelection?) {
         self.selection = selection
-        expandedArticleID = nil
-        selectedArticleID = nil
     }
 
     /// Unsubscribing has to leave a tombstone behind, or the next device to

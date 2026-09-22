@@ -22,6 +22,7 @@ struct TimelinePane: View {
     private var allArticles: [Article]
 
     @State private var hasSetInitialSelection = false
+    @FocusState private var isListFocused: Bool
 
     // MARK: - Scoping
 
@@ -137,6 +138,19 @@ struct TimelinePane: View {
         context.article(with: model.expandedArticleID ?? model.selectedArticleID)
     }
 
+    /// Move the current article by one. With nothing selected yet, the first
+    /// key press lands on the top of the list rather than doing nothing.
+    @discardableResult
+    private func moveSelection(_ step: Int, in articles: [Article]) -> KeyPress.Result {
+        guard !articles.isEmpty else { return .handled }
+        if model.selectedArticleID == nil {
+            model.selectedArticleID = articles.first?.persistentModelID
+            return .handled
+        }
+        if step > 0 { model.goToNext() } else { model.goToPrevious() }
+        return .handled
+    }
+
     // MARK: - List
 
     @ViewBuilder
@@ -149,40 +163,63 @@ struct TimelinePane: View {
                 set: { model.selectedArticleID = $0 }
             )
 
-            List(selection: selection) {
-                ForEach(articles) { article in
-                    ArticleRowView(
-                        article: article,
-                        showsFeedName: !isSingleFeedScope,
-                        onOpen: { model.open(article) }
-                    )
-                    .tag(article.persistentModelID)
-                    .listRowBackground(rowBackground(for: article))
+            ScrollViewReader { scroller in
+                List(selection: selection) {
+                    ForEach(articles) { article in
+                        ArticleRowView(
+                            article: article,
+                            showsFeedName: !isSingleFeedScope,
+                            onOpen: { model.open(article) }
+                        )
+                        .tag(article.persistentModelID)
+                        .id(article.persistentModelID)
+                        .listRowBackground(rowBackground(for: article))
+                    }
                 }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .environment(\.defaultMinListRowHeight, 10)
-            .refreshable { await model.refresher.refreshAll(in: context) }
-            .onKeyPress(.space) {
-                toggleReader()
-                return .handled
-            }
-            .onKeyPress(.return) {
-                toggleReader()
-                return .handled
-            }
-            .onKeyPress(characters: .alphanumerics) { press in
-                switch press.characters {
-                case "j":
-                    model.goToNext(); return .handled
-                case "k":
-                    model.goToPrevious(); return .handled
-                case "s":
-                    if let article = currentArticle { article.toggleStar(); try? context.save() }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .environment(\.defaultMinListRowHeight, 10)
+                .refreshable { await model.refresher.refreshAll(in: context) }
+                // The list has to hold focus for any of the keys below to
+                // reach it, and it has to take focus back when the reader
+                // closes — the reader was holding it until a moment ago.
+                .focusable()
+                .focusEffectDisabled()
+                .focused($isListFocused)
+                .onAppear { isListFocused = true }
+                .onChange(of: model.isReaderExpanded) { _, expanded in
+                    if !expanded { isListFocused = true }
+                }
+                .onChange(of: model.selectedArticleID) { _, id in
+                    // Keep the current article on screen when the keyboard,
+                    // rather than the mouse, is what moved it.
+                    guard let id else { return }
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        scroller.scrollTo(id, anchor: .center)
+                    }
+                }
+                .onKeyPress(.upArrow) { moveSelection(-1, in: articles) }
+                .onKeyPress(.downArrow) { moveSelection(1, in: articles) }
+                .onKeyPress(.space) {
+                    toggleReader()
                     return .handled
-                default:
-                    return .ignored
+                }
+                .onKeyPress(.return) {
+                    toggleReader()
+                    return .handled
+                }
+                .onKeyPress(characters: .alphanumerics) { press in
+                    switch press.characters {
+                    case "j":
+                        return moveSelection(1, in: articles)
+                    case "k":
+                        return moveSelection(-1, in: articles)
+                    case "s":
+                        if let article = currentArticle { article.toggleStar(); try? context.save() }
+                        return .handled
+                    default:
+                        return .ignored
+                    }
                 }
             }
         }

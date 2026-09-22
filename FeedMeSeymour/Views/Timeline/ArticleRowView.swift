@@ -65,12 +65,9 @@ struct ArticleRowView: View {
         .padding(.vertical, isCompact ? 8 : 12)
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
-        // A click selects and a double-click reads on the Mac; a tap reads on iOS.
-        #if os(macOS)
-        .onTapGesture(count: 2) { onOpen() }
-        #else
+        // One click opens it, on both platforms. Opening also selects, so the
+        // row you clicked is the current one when you come back out.
         .onTapGesture { onOpen() }
-        #endif
         .onHover { isHovering = $0 }
         .contextMenu { menu }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
