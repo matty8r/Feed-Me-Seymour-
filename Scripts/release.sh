@@ -22,11 +22,14 @@
 #     1. An embedded Developer ID provisioning profile carrying the
 #        iCloud.<bundle-id> container. Development profiles won't do — they're
 #        rejected once the app is signed for distribution.
-#     2. aps-environment = production in the entitlements, or CloudKit's push
-#        notifications never arrive and SyncCoordinator only reconciles on
-#        launch, foreground and refresh rather than live. Xcode's Developer ID
-#        export drops the key rather than promoting it from development, so the
-#        app is re-signed afterwards with it restored — see "Re-signing" below.
+#     2. The push entitlement set to production, or CloudKit's notifications
+#        never arrive and SyncCoordinator only reconciles on launch, foreground
+#        and refresh rather than live. Mind the key name: iOS spells it
+#        `aps-environment`, macOS spells it `com.apple.developer.aps-environment`,
+#        and the checked-in entitlements carry the iOS spelling. Xcode silently
+#        strips the key that doesn't belong to the platform it's signing for, so
+#        a Mac build with only the iOS spelling comes out with no push
+#        entitlement at all and nothing says so. Both are set below.
 #     3. iCloudContainerEnvironment = Production at export, or the shipped app
 #        reads the development CloudKit database, which is empty for everyone
 #        but you.
@@ -145,8 +148,13 @@ trap 'rm -rf "${WORK}"' EXIT
 # builds. $(PRODUCT_BUNDLE_IDENTIFIER) inside it still expands at build time.
 ENTITLEMENTS="${WORK}/Release.entitlements"
 cp "${APP_NAME}.entitlements" "${ENTITLEMENTS}"
-/usr/libexec/PlistBuddy -c "Set :aps-environment production" "${ENTITLEMENTS}" 2>/dev/null \
-    || /usr/libexec/PlistBuddy -c "Add :aps-environment string production" "${ENTITLEMENTS}"
+# Both spellings: macOS reads com.apple.developer.aps-environment and throws the
+# other away, iOS does the reverse. Setting only one is how you end up with a
+# notarized Mac build that has no push entitlement.
+for key in "aps-environment" "com.apple.developer.aps-environment"; do
+    /usr/libexec/PlistBuddy -c "Set :${key} production" "${ENTITLEMENTS}" 2>/dev/null \
+        || /usr/libexec/PlistBuddy -c "Add :${key} string production" "${ENTITLEMENTS}"
+done
 
 # ------------------------------------------------------------------- archive
 
@@ -212,10 +220,12 @@ grep -q "flags=.*runtime" <<<"${SIGNATURE}" \
 BUILT_ENTITLEMENTS="$(codesign -d --entitlements - --xml "${APP}" 2>/dev/null | plutil -convert xml1 -o - -)"
 grep -qF "${CONTAINER}" <<<"${BUILT_ENTITLEMENTS}" \
     || die "The signed app is missing the ${CONTAINER} entitlement."
-APS_LINE="$(grep -A1 'aps-environment' <<<"${BUILT_ENTITLEMENTS}" || true)"
+APS_LINE="$(grep -A1 'com.apple.developer.aps-environment' <<<"${BUILT_ENTITLEMENTS}" || true)"
 grep -q 'production' <<<"${APS_LINE}" \
-    || die "The signed app's aps-environment is not production."
-echo "    Developer ID signed, ${CONTAINER} present, aps-environment production"
+    || die "The signed app has no com.apple.developer.aps-environment = production.
+That's the macOS spelling of the push entitlement; without it CloudKit never
+delivers a change notification and sync only catches up on launch."
+echo "    Developer ID signed, ${CONTAINER} present, push entitlement production"
 
 VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP}/Contents/Info.plist")"
 DMG="${APP_NAME}-${VERSION}.dmg"
