@@ -21,3 +21,6 @@ xcuserdata/
 # Editors
 *.swp
 .idea/
+
+# Release artifacts, produced by Scripts/release.sh
+*.dmg
