@@ -3,8 +3,18 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 70;
 	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		FE0000000000000000000071 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FE0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FE0000000000000000000010;
+			remoteInfo = FeedMeSeymour;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		FE0000000000000000000020 /* FeedMeSeymour.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FeedMeSeymour.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -14,16 +24,8 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		FE0000000000000000000040 /* FeedMeSeymour */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = FeedMeSeymour;
-			sourceTree = "<group>";
-		};
-		FE0000000000000000000041 /* FeedMeSeymourTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = FeedMeSeymourTests;
-			sourceTree = "<group>";
-		};
+		FE0000000000000000000040 /* FeedMeSeymour */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = FeedMeSeymour; sourceTree = "<group>"; };
+		FE0000000000000000000041 /* FeedMeSeymourTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = FeedMeSeymourTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,7 +143,6 @@
 			);
 			mainGroup = FE0000000000000000000002;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = FE0000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -193,16 +194,6 @@
 			targetProxy = FE0000000000000000000071 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
-
-/* Begin PBXContainerItemProxy section */
-		FE0000000000000000000071 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = FE0000000000000000000001 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = FE0000000000000000000010;
-			remoteInfo = FeedMeSeymour;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin XCBuildConfiguration section */
 		FE0000000000000000000060 /* Debug */ = {
@@ -305,6 +296,7 @@
 				CODE_SIGN_ENTITLEMENTS = FeedMeSeymour.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = CG3Q63736Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -321,7 +313,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.feedmeseymour.FeedMeSeymour;
+				PRODUCT_BUNDLE_IDENTIFIER = com.backyard.feedmeseymore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -336,6 +328,7 @@
 				CODE_SIGN_ENTITLEMENTS = FeedMeSeymour.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = CG3Q63736Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -352,7 +345,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.feedmeseymour.FeedMeSeymour;
+				PRODUCT_BUNDLE_IDENTIFIER = com.backyard.feedmeseymore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
