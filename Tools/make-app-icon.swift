@@ -33,9 +33,15 @@ func draw(_ ctx: CGContext, _ art: CGImage, rounded: Bool, zoom: CGFloat, focus:
     ctx.clip()
 
     let side = (C - 2*inset) * zoom
-    // focus is in unit coords of the artwork (0,0 bottom-left .. 1,1 top-right)
-    let x = inset + (C - 2*inset)/2 - side * focus.x
-    let y = inset + (C - 2*inset)/2 - side * focus.y
+    // focus is in unit coords of the artwork (0,0 bottom-left .. 1,1 top-right).
+    // Clamp it so the crop window can never run off the edge of the art: at
+    // zoom 1 that forces it back to centre and the whole piece shows, which is
+    // what the large sizes want.
+    let half = 0.5 / zoom
+    let fx = min(max(focus.x, half), 1 - half)
+    let fy = min(max(focus.y, half), 1 - half)
+    let x = inset + (C - 2*inset)/2 - side * fx
+    let y = inset + (C - 2*inset)/2 - side * fy
     ctx.interpolationQuality = .high
     ctx.draw(art, in: CGRect(x: x, y: y, width: side, height: side))
     ctx.restoreGState()
@@ -57,7 +63,7 @@ func render(_ art: CGImage, size: Int, rounded: Bool, zoom: CGFloat, focus: CGPo
 
 let art   = load(CommandLine.arguments[1])
 let out   = CommandLine.arguments[2]
-let focus = CGPoint(x: 0.52, y: 0.56)      // the photographic trap at the collage's heart
+let focus = CGPoint(x: 0.34, y: 0.62)      // the big trap at upper left
 
 // The collage is dense: shown whole it turns to mush below ~256px. So the frame
 // tightens onto the central trap as the icon shrinks — full artwork where there
