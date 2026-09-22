@@ -31,7 +31,7 @@ struct Palette {
     /// The reading surface.
     var paper: Color {
         switch theme {
-        case .paper: Color(hex: 0xFBF4E6)
+        case .paper: Color(hex: 0xFDFAF2)
         case .night: Color(hex: 0x111315)
         case .system: isDark ? Color(hex: 0x0E0F11) : Color(hex: 0xFFFFFF)
         }
