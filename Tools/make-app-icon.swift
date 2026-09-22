@@ -65,18 +65,20 @@ let art   = load(CommandLine.arguments[1])
 let out   = CommandLine.arguments[2]
 let focus = CGPoint(x: 0.34, y: 0.62)      // the big trap at upper left
 
-// The collage is dense: shown whole it turns to mush below ~256px. So the frame
-// tightens onto the central trap as the icon shrinks — full artwork where there
-// are pixels to carry it, a legible plant where there aren't.
+// The whole piece wherever there are pixels to carry it — 256 and up show the
+// artwork as painted. Below that the collage turns to confetti, so the frame
+// tightens onto the big trap at upper left and the icon stays a plant.
 let macZoom: [Int: CGFloat] = [
-    16: 2.50, 32: 2.50, 64: 2.10, 128: 1.75, 256: 1.35, 512: 1.05, 1024: 1.0,
+    16: 2.80, 32: 2.60, 64: 2.20, 128: 1.70, 256: 1.0, 512: 1.0, 1024: 1.0,
 ]
 
 for (n, z) in macZoom.sorted(by: { $0.key < $1.key }) {
     render(art, size: n, rounded: true, zoom: z, focus: focus, to: "\(out)/icon-mac-\(n).png")
 }
 
-// iOS ships a single 1024 and the system derives every other size from it, so it
-// has to survive the home screen on its own: a middle crop, not the full collage.
-render(art, size: 1024, rounded: false, zoom: 1.55, focus: focus, to: "\(out)/icon-ios-1024.png")
+// iOS ships a single 1024 and the system derives every other size from it, so
+// this one asset is both the high-resolution icon and the home screen one. Shown
+// whole, as here, the home screen icon is dense — raise this if that matters
+// more than the artwork surviving intact at full size.
+render(art, size: 1024, rounded: false, zoom: 1.0, focus: focus, to: "\(out)/icon-ios-1024.png")
 print("rendered")
