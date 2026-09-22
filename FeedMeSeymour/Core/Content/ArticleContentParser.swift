@@ -634,7 +634,7 @@ private extension Builder {
     static func largestCandidate(inSrcset srcset: String, baseURL: URL?) -> URL? {
         var best: (url: URL, weight: Double)?
         for entry in srcset.split(separator: ",") {
-            let parts = entry.trimmed.split(separator: " ", omittingEmptySubsequences: true)
+            let parts = String(entry).trimmed.split(separator: " ", omittingEmptySubsequences: true)
             guard let first = parts.first, let url = URL.resolving(String(first), relativeTo: baseURL), url.scheme != "data" else { continue }
             var weight = 1.0
             if parts.count > 1 {

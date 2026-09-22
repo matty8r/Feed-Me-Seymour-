@@ -88,7 +88,7 @@ final class AudioPlaybackController {
         }
 
         endObserver = NotificationCenter.default.addObserver(
-            forName: AVPlayerItem.didPlayToEndTime,
+            forName: AVPlayerItem.didPlayToEndTimeNotification,
             object: item,
             queue: .main
         ) { [weak self] _ in

@@ -392,8 +392,8 @@ enum SpeechVoiceCatalog {
 
     // MARK: Personal Voice
 
-    static var personalVoiceStatus: AVSpeechSynthesisVoice.PersonalVoiceAuthorizationStatus {
-        AVSpeechSynthesisVoice.personalVoiceAuthorizationStatus
+    static var personalVoiceStatus: AVSpeechSynthesizer.PersonalVoiceAuthorizationStatus {
+        AVSpeechSynthesizer.personalVoiceAuthorizationStatus
     }
 
     static var canRequestPersonalVoice: Bool {
@@ -401,6 +401,6 @@ enum SpeechVoiceCatalog {
     }
 
     static func requestPersonalVoiceAccess() async -> Bool {
-        await AVSpeechSynthesisVoice.requestPersonalVoiceAuthorization() == .authorized
+        await AVSpeechSynthesizer.requestPersonalVoiceAuthorization() == .authorized
     }
 }
