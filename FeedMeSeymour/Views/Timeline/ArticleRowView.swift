@@ -24,9 +24,10 @@ struct ArticleRowView: View {
     private var isCompact: Bool { settings.usesCompactRows }
 
     private var thumbnailURL: URL? {
-        guard settings.showsImages else { return nil }
-        if let banner = article.bannerImageURL { return banner }
-        return article.attachments.first(where: { $0.kind == .image })?.url
+        // Only the stored banner. Reaching into `attachments` for a fallback
+        // faults the relationship, and a row does this while it lays out.
+        // Image enclosures are folded into the banner when the feed is parsed.
+        settings.showsImages ? article.bannerImageURL : nil
     }
 
     /// A square, so a column of rows has a straight edge down the right

@@ -63,6 +63,17 @@ final class Article {
     @Relationship(deleteRule: .cascade, inverse: \MediaAttachment.article)
     var attachments: [MediaAttachment] = []
 
+    /// Whether this article carries audio or video, stored rather than derived.
+    ///
+    /// Asking the relationship means faulting it, which is a synchronous trip
+    /// through the managed object context. A timeline row asks while it is
+    /// building, every row, on every pass — a profile of an idle window showed
+    /// `Article.hasAudio` sitting on top of `NSManagedObjectContext.performAndWait`
+    /// and it was the single most expensive thing the app did. Two booleans on
+    /// the row cost nothing to read.
+    var hasAudio: Bool = false
+    var hasVideo: Bool = false
+
     init(
         guid: String,
         title: String,
@@ -111,8 +122,12 @@ final class Article {
         max(1, Int((Double(wordCount) / 200.0).rounded()))
     }
 
-    var hasAudio: Bool { attachments.contains { $0.kind == .audio } }
-    var hasVideo: Bool { attachments.contains { $0.kind == .video } }
+    /// Recompute the stored media flags from the attachments. Call this
+    /// wherever attachments are written.
+    func refreshMediaFlags() {
+        hasAudio = attachments.contains { $0.kind == .audio }
+        hasVideo = attachments.contains { $0.kind == .video }
+    }
 
     func toggleStar() {
         isStarred.toggle()

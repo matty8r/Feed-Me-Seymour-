@@ -136,6 +136,7 @@ final class FeedRefreshService {
                     context.insert(media)
                     media.article = article
                 }
+                article.refreshMediaFlags()
                 existing[guid] = article
             }
         }

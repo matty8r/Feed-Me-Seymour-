@@ -33,7 +33,19 @@ struct ParsedItem: Sendable {
     /// own. Called once as each item finishes parsing, which is off the main
     /// actor — the merge that follows is not the place to be tokenising HTML.
     mutating func resolveBannerImage() {
-        guard bannerImageURL == nil, let html = contentHTML ?? summaryHTML else { return }
+        guard bannerImageURL == nil else { return }
+
+        // An image enclosure is as good a thumbnail as one dug out of the
+        // prose, and settling it here means the timeline never has to fault
+        // the attachments relationship to find a picture.
+        if let image = attachments.first(where: {
+            MediaKind.inferred(mimeType: $0.mimeType, url: $0.url) == .image
+        }) {
+            bannerImageURL = image.url
+            return
+        }
+
+        guard let html = contentHTML ?? summaryHTML else { return }
         bannerImageURL = ArticleContentParser.leadImageURL(inHTML: html, baseURL: url)
     }
 

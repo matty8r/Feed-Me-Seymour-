@@ -79,10 +79,15 @@ struct TimelinePane: View {
         ZStack {
             palette.canvas.ignoresSafeArea()
 
-            timelineList(articles)
-                .opacity(model.isReaderExpanded ? 0 : 1)
-                .scaleEffect(model.isReaderExpanded ? 0.985 : 1, anchor: .center)
-                .allowsHitTesting(!model.isReaderExpanded)
+            // Taken out of the hierarchy rather than hidden behind the
+            // reader. At zero opacity it was still there, and every row kept
+            // rebuilding itself on each selection change — profiling a run
+            // through articles with J showed the hot path was almost entirely
+            // ArticleRowView, for rows nobody could see.
+            if !model.isReaderExpanded {
+                timelineList(articles)
+                    .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .center)))
+            }
 
             if let article = expandedArticle {
                 ArticleReaderView(article: article)
@@ -158,13 +163,13 @@ struct TimelinePane: View {
         if articles.isEmpty {
             emptyState
         } else {
-            let selection = Binding(
+            ScrollViewReader { scroller in
+                let selection = Binding(
                 get: { model.selectedArticleID },
                 set: { model.selectedArticleID = $0 }
             )
 
-            ScrollViewReader { scroller in
-                List(selection: selection) {
+            List(selection: selection) {
                     ForEach(articles) { article in
                         ArticleRowView(
                             article: article,
@@ -186,7 +191,14 @@ struct TimelinePane: View {
                 .focusable()
                 .focusEffectDisabled()
                 .focused($isListFocused)
-                .onAppear { isListFocused = true }
+                .onAppear {
+                    isListFocused = true
+                    // The list is rebuilt when the reader closes, so put the
+                    // article you were reading back under the eye.
+                    if let id = model.selectedArticleID {
+                        scroller.scrollTo(id, anchor: .center)
+                    }
+                }
                 .onChange(of: model.isReaderExpanded) { _, expanded in
                     if !expanded { isListFocused = true }
                 }
