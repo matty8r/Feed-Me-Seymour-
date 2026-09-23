@@ -33,7 +33,7 @@ final class ArticleRenderer {
 
     func render(_ article: Article) -> RenderedArticle {
         let html = article.bestHTML ?? ""
-        let key = "\(article.uuid.uuidString)-\(html.count)" as NSString
+        let key = Self.cacheKey(for: article, html: html)
         if let cached = cache.object(forKey: key) { return cached.value }
 
         let rendered = Self.render(
@@ -43,6 +43,32 @@ final class ArticleRenderer {
         )
         cache.setObject(CacheBox(rendered), forKey: key)
         return rendered
+    }
+
+    /// Render an article before anyone asks to see it.
+    ///
+    /// Moving to the next article otherwise parses its HTML during the
+    /// transition, which is exactly when the main thread has other things to
+    /// do — the new text lands a beat late and the layout settles visibly.
+    /// Parsing happens off the main actor; only the cache write comes back.
+    func prepare(_ article: Article) {
+        let html = article.bestHTML ?? ""
+        let key = Self.cacheKey(for: article, html: html)
+        guard cache.object(forKey: key) == nil else { return }
+
+        let baseURL = article.url ?? article.feed?.homePageURL
+        let banner = article.bannerImageURL
+
+        Task.detached(priority: .utility) {
+            let rendered = Self.render(html: html, baseURL: baseURL, bannerImageURL: banner)
+            await MainActor.run {
+                ArticleRenderer.shared.cache.setObject(CacheBox(rendered), forKey: key)
+            }
+        }
+    }
+
+    private static func cacheKey(for article: Article, html: String) -> NSString {
+        "\(article.uuid.uuidString)-\(html.count)" as NSString
     }
 
     func invalidate() { cache.removeAllObjects() }

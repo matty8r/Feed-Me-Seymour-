@@ -77,7 +77,13 @@ final class SyncedArticleState {
     var isRead: Bool = false
     var isStarred: Bool = false
     var starredAt: Date?
+
+    /// Clock for `isRead`.
     var updatedAt: Date = Date()
+
+    /// Clock for `isStarred`, kept apart from the read clock so that reading an
+    /// article on one device cannot undo a favourite made on another.
+    var starUpdatedAt: Date = Date.distantPast
 
     /// Just enough to show a favourite whose body this device has never seen.
     /// A stub article is built from these three fields and filled in properly
@@ -107,6 +113,7 @@ final class SyncedArticleState {
         isStarred = article.isStarred
         starredAt = article.starredAt
         updatedAt = article.stateUpdatedAt
+        starUpdatedAt = article.starUpdatedAt
         title = article.title
         articleURLString = article.url?.absoluteString
         publishedAt = article.publishedAt

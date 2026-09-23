@@ -36,8 +36,17 @@ final class Article {
     var isStarred: Bool = false
     var starredAt: Date?
 
-    /// Clock for `isRead` / `isStarred`, compared against the iCloud mirror.
+    /// Clock for `isRead`, compared against the iCloud mirror.
+    ///
+    /// Read state and favourites get separate clocks on purpose. Sharing one
+    /// meant the whole record merged together, so marking an article read on
+    /// one device overwrote a favourite made on another — and reading is
+    /// constant while starring is rare, so the cheap action kept destroying
+    /// the considered one.
     var stateUpdatedAt: Date = Date.distantPast
+
+    /// Clock for `isStarred`. Moves only when the star itself changes.
+    var starUpdatedAt: Date = Date.distantPast
 
     /// A favourite that arrived from another device before its body did. The
     /// next refresh of this feed fills it in.
@@ -108,7 +117,7 @@ final class Article {
     func toggleStar() {
         isStarred.toggle()
         starredAt = isStarred ? Date() : nil
-        stateUpdatedAt = .now
+        starUpdatedAt = .now
     }
 
     /// How a *person's* action should change read state: bumping the clock is

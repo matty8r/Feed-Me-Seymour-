@@ -48,6 +48,7 @@ struct ArticleReaderView: View {
             isFocused = true
             render()
         }
+        .animation(.easeInOut(duration: 0.22), value: article.persistentModelID)
         .onChange(of: article.persistentModelID) { _, _ in
             scrollProgress = 0
             render()
@@ -199,6 +200,17 @@ struct ArticleReaderView: View {
     // MARK: - Body
 
     private var scrollingBody: some View {
+        renderedBody
+            // Keyed by article, so changing article replaces this subtree
+            // instead of mutating it. Mutating it in place is what made the
+            // text shuffle around as blocks of different heights swapped
+            // between one article and the next; replacing it lets the old one
+            // dissolve into the new.
+            .id(article.persistentModelID)
+            .transition(.opacity)
+    }
+
+    private var renderedBody: some View {
         ScrollViewReader { scroller in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -284,9 +296,20 @@ struct ArticleReaderView: View {
 
     private func render() {
         rendered = ArticleRenderer.shared.render(article)
+        prepareNeighbours()
         if settings.marksReadOnOpen, !article.isRead {
             article.setRead(true)
             try? context.save()
+        }
+    }
+
+    /// Render what's on either side while this article is being read, so
+    /// moving on doesn't have to parse anything.
+    private func prepareNeighbours() {
+        for id in [model.nextArticleID, model.previousArticleID] {
+            if let neighbour = context.article(with: id) {
+                ArticleRenderer.shared.prepare(neighbour)
+            }
         }
     }
 

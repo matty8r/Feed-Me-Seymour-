@@ -51,8 +51,15 @@ struct ArticleRowView: View {
                 // A plain fixed square. Letting it track the row height instead
                 // — maxHeight .infinity with a 1:1 ratio — makes it flexible on
                 // both axes, and an HStack hands a view like that the whole row.
-                RemoteImage(url: thumbnailURL, contentMode: .fill, cornerRadius: 8)
+                RemoteImage(url: thumbnailURL, contentMode: .fill)
+                    // Clip after the frame, not before it. A .fill image only
+                    // knows how far it overflows once something has told it how
+                    // big it is, so clipping inside RemoteImage — ahead of this
+                    // frame — trimmed nothing and the picture spilled over the
+                    // headline anyway.
                     .frame(width: thumbnailSide, height: thumbnailSide)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .strokeBorder(palette.rule, lineWidth: 0.5)

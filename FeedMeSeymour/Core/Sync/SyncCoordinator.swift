@@ -223,15 +223,38 @@ final class SyncCoordinator {
                 continue
             }
 
+            // Read state and favourites are merged one at a time, on their own
+            // clocks. Merging the record whole meant whichever side had touched
+            // it last dictated both facts, so reading an article here quietly
+            // threw away a favourite made there.
+            //
+            // Assign directly rather than through `setRead`/`toggleStar` when
+            // adopting: those stamp this device as the newer one, which is
+            // exactly wrong when the news came from elsewhere.
             if state.updatedAt > article.stateUpdatedAt {
-                // Adopting a remote clock, so assign directly rather than
-                // through `setRead`, which would stamp this device as newer.
                 article.isRead = state.isRead
-                article.isStarred = state.isStarred
-                article.starredAt = state.starredAt
                 article.stateUpdatedAt = state.updatedAt
             } else if article.stateUpdatedAt > state.updatedAt {
-                state.apply(from: article)
+                state.isRead = article.isRead
+                state.updatedAt = article.stateUpdatedAt
+            }
+
+            if state.starUpdatedAt > article.starUpdatedAt {
+                article.isStarred = state.isStarred
+                article.starredAt = state.starredAt
+                article.starUpdatedAt = state.starUpdatedAt
+            } else if article.starUpdatedAt > state.starUpdatedAt {
+                state.isStarred = article.isStarred
+                state.starredAt = article.starredAt
+                state.starUpdatedAt = article.starUpdatedAt
+            }
+
+            // Whoever wrote last owns the descriptive fields; they are only
+            // there so a favourite can be shown before its article arrives.
+            if article.stateUpdatedAt >= state.updatedAt || article.starUpdatedAt >= state.starUpdatedAt {
+                state.title = article.title
+                state.articleURLString = article.url?.absoluteString
+                state.publishedAt = article.publishedAt
             }
         }
 
@@ -250,6 +273,7 @@ final class SyncCoordinator {
             stub.isRead = state.isRead
             stub.starredAt = state.starredAt
             stub.stateUpdatedAt = state.updatedAt
+            stub.starUpdatedAt = state.starUpdatedAt
             stub.isPlaceholder = true
             context.insert(stub)
             stub.feed = feed

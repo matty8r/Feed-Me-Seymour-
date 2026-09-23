@@ -201,6 +201,7 @@ struct SyncTests {
         state.isStarred = true
         state.starredAt = .now
         state.updatedAt = .now
+        state.starUpdatedAt = .now
         context.insert(state)
 
         makeCoordinator().reconcile(in: context)
@@ -308,5 +309,118 @@ struct SyncTests {
         // A second pass must not resurrect it.
         coordinator.reconcile(in: context)
         #expect(feeds(context).isEmpty)
+    }
+}
+
+// MARK: - Read state versus favourites
+
+/// Reading an article is common; starring one is rare and deliberate. When the
+/// two share a clock and the record merges whole, the common event overwrites
+/// the deliberate one — which is the difference between "favourites sync" and
+/// "favourites sync until you read something".
+@MainActor
+@Suite("Favorites survive reading")
+struct FavoriteClockTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(Persistence.makeInMemoryContainer())
+    }
+
+    private func makeCoordinator() -> SyncCoordinator {
+        let defaults = UserDefaults(suiteName: "fav.tests.\(UUID().uuidString)")!
+        let coordinator = SyncCoordinator(isCloudBacked: true, defaults: defaults)
+        coordinator.isEnabled = true
+        return coordinator
+    }
+
+    /// Another device stars an article. This device then reads it. The star
+    /// must survive: neither device disagrees about it, and one of them never
+    /// said anything about it at all.
+    @Test("Reading here does not unstar what another device starred")
+    func readingDoesNotClobberARemoteStar() {
+        let context = makeContext()
+        let feed = Feed(feedURL: URL(string: "https://example.com/feed")!, title: "Gazette")
+        context.insert(feed)
+
+        let article = Article(guid: "item-1", title: "Somewhere That's Green", publishedAt: .now)
+        context.insert(article)
+        article.feed = feed
+
+        // Another device starred it a minute ago.
+        let starred = SyncedArticleState(
+            feedURLString: "https://example.com/feed",
+            guid: "item-1"
+        )
+        starred.isStarred = true
+        starred.starredAt = Date().addingTimeInterval(-60)
+        starred.updatedAt = Date().addingTimeInterval(-60)
+        starred.starUpdatedAt = Date().addingTimeInterval(-60)
+        starred.title = "Somewhere That's Green"
+        context.insert(starred)
+
+        // Then this device reads it — later, so its clock is newer.
+        article.setRead(true)
+
+        makeCoordinator().reconcile(in: context)
+
+        #expect(article.isRead)
+        #expect(article.isStarred, "reading an article must not clear a favourite made elsewhere")
+
+        let mirror = ((try? context.fetch(FetchDescriptor<SyncedArticleState>())) ?? []).first
+        #expect(mirror?.isStarred == true, "and the mirror must not carry the loss back to the other device")
+    }
+
+    /// The mirror image: starred here, read there.
+    @Test("Reading elsewhere does not unstar what this device starred")
+    func remoteReadDoesNotClobberALocalStar() {
+        let context = makeContext()
+        let feed = Feed(feedURL: URL(string: "https://example.com/feed")!, title: "Gazette")
+        context.insert(feed)
+
+        let article = Article(guid: "item-2", title: "Suddenly Seymour", publishedAt: .now)
+        context.insert(article)
+        article.feed = feed
+        article.toggleStar()                    // starred here, a moment ago
+
+        // Another device read it just now — newer clock, and it knows nothing
+        // about the star.
+        let read = SyncedArticleState(feedURLString: "https://example.com/feed", guid: "item-2")
+        read.isRead = true
+        read.isStarred = false
+        read.updatedAt = Date().addingTimeInterval(60)
+        context.insert(read)
+
+        makeCoordinator().reconcile(in: context)
+
+        #expect(article.isRead)
+        #expect(article.isStarred, "a favourite must not be lost because another device read the article")
+    }
+
+    /// Unstarring is still a real action and must win when it is the newer one.
+    @Test("Deliberately unstarring still propagates")
+    func unstarringWins() {
+        let context = makeContext()
+        let feed = Feed(feedURL: URL(string: "https://example.com/feed")!, title: "Gazette")
+        context.insert(feed)
+
+        let article = Article(guid: "item-3", title: "Feed Me", publishedAt: .now)
+        context.insert(article)
+        article.feed = feed
+        article.isStarred = true
+        article.starredAt = Date().addingTimeInterval(-120)
+        article.stateUpdatedAt = Date().addingTimeInterval(-120)
+        article.starUpdatedAt = Date().addingTimeInterval(-120)
+
+        // Another device unstarred it since.
+        let unstarred = SyncedArticleState(feedURLString: "https://example.com/feed", guid: "item-3")
+        unstarred.isStarred = false
+        unstarred.starredAt = nil
+        unstarred.updatedAt = Date()
+        unstarred.starUpdatedAt = Date()
+        context.insert(unstarred)
+
+        makeCoordinator().reconcile(in: context)
+
+        #expect(!article.isStarred, "an explicit unstar is a decision and must survive")
     }
 }
