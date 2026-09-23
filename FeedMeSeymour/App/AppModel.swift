@@ -11,26 +11,6 @@ import SwiftUI
 import SwiftData
 import Observation
 
-enum SidebarTab: String, CaseIterable, Identifiable, Hashable {
-    case subscriptions, favorites
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .subscriptions: "Feeds"
-        case .favorites: "Favorites"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .subscriptions: "dot.radiowaves.up.forward"
-        case .favorites: "star"
-        }
-    }
-}
-
 enum FeedSelection: Hashable {
     case all
     case unread
@@ -45,7 +25,6 @@ enum FeedSelection: Hashable {
 final class AppModel {
 
     // Chrome
-    var sidebarTab: SidebarTab = .subscriptions
     /// Optional so that iPhone starts on the sidebar instead of pushing a list
     /// the reader never asked for.
     var selection: FeedSelection? = Platform.isPhone ? nil : .all {

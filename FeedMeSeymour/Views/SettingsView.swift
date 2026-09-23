@@ -143,9 +143,24 @@ struct SettingsView: View {
                 ))
                 .disabled(!model.sync.isCloudBacked)
 
-                Text(model.sync.statusDescription)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 7) {
+                    if model.sync.needsRelaunch || model.sync.isFailing {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    Text(model.sync.statusDescription)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                // Every other push is a side effect of refreshing, closing the
+                // app or opening it. That is fine until you are trying to find
+                // out whether sync works, which is exactly when you want to ask
+                // it directly and be told what happened.
+                Button("Sync Now") {
+                    model.sync.reconcile(in: context)
+                }
+                .disabled(!model.sync.isActive || model.sync.isSyncing)
 
                 Text("Subscriptions, favorites and read state travel between your devices. Article text and media stay on each device and are re-downloaded from the publisher when needed.")
                     .font(.footnote)

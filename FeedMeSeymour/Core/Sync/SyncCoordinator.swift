@@ -37,8 +37,14 @@ final class SyncCoordinator {
     }
 
     private(set) var isSyncing = false
+    /// When the app last ran its own pass. Deliberately not what the status
+    /// line leads with: the pass can finish cleanly while CloudKit rejects
+    /// every record it produced.
     private(set) var lastSyncDate: Date?
     private(set) var lastError: String?
+
+    /// What CloudKit itself reports. This is what the status line believes.
+    let activity = CloudKitActivity()
 
     private let defaults: UserDefaults
 
@@ -55,8 +61,21 @@ final class SyncCoordinator {
         if !isEnabled { return "Off. Subscriptions and favorites stay on this device." }
         if isSyncing { return "Syncing…" }
         if let lastError { return lastError }
-        if let lastSyncDate { return "Last synced \(lastSyncDate.relativeStamp)." }
+        // CloudKit's own account of itself comes first. Only when it has
+        // nothing to say do we fall back to "we ran a pass".
+        if let summary = activity.summary { return summary }
+        if let lastSyncDate { return "Checked \(lastSyncDate.relativeStamp)." }
         return "On."
+    }
+
+    /// True when iCloud has stopped for this launch and only reopening the app
+    /// will start it again.
+    var needsRelaunch: Bool { isActive && activity.needsRelaunch }
+
+    /// True when the most recent thing CloudKit did was fail.
+    var isFailing: Bool {
+        guard isActive, let failure = activity.lastFailure else { return false }
+        return failure.endedAt > (activity.lastSuccess?.endedAt ?? .distantPast)
     }
 
     // MARK: - The pass
