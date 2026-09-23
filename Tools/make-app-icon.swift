@@ -48,9 +48,19 @@ func draw(_ ctx: CGContext, _ art: CGImage, rounded: Bool, zoom: CGFloat, focus:
 }
 
 func render(_ art: CGImage, size: Int, rounded: Bool, zoom: CGFloat, focus: CGPoint, to path: String) {
+    // The App Store rejects an iOS icon carrying an alpha channel — "the large
+    // app icon can't be transparent". macOS needs alpha for the rounded corner,
+    // iOS must not have it at all, so the full-bleed variant is drawn opaque
+    // rather than merely painted edge to edge.
+    let opaque = !rounded
+    let alpha = opaque ? CGImageAlphaInfo.noneSkipLast : .premultipliedLast
     let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
                         bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+                        bitmapInfo: alpha.rawValue)!
+    if opaque {
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
+    }
     let k = CGFloat(size)/C
     ctx.scaleBy(x: k, y: k)
     draw(ctx, art, rounded: rounded, zoom: zoom, focus: focus)
