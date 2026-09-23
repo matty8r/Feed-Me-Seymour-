@@ -56,24 +56,12 @@ struct RemoteImage: View {
 
     @ViewBuilder
     private var staticImage: some View {
-        AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.28))) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
-                    .transition(.opacity)
-            case .failure:
-                placeholder(symbol: "photo.badge.exclamationmark")
-            case .empty:
-                if showsProgress {
-                    placeholder(symbol: nil)
-                } else {
-                    Color.clear
-                }
-            @unknown default:
-                placeholder(symbol: nil)
-            }
+        // Not AsyncImage: it re-fetches and re-decodes every time the view is
+        // built, which is constantly. ImageStore hands back an already-decoded
+        // picture, so a rebuilt view shows it immediately rather than blinking
+        // through a placeholder on the way.
+        CachedImage(url: url, contentMode: contentMode, showsProgress: showsProgress) { symbol in
+            placeholder(symbol: symbol)
         }
     }
 
@@ -89,6 +77,51 @@ struct RemoteImage: View {
                 ProgressView()
                     .controlSize(.small)
             }
+        }
+    }
+}
+
+
+// MARK: - The loading view
+
+private struct CachedImage<Placeholder: View>: View {
+
+    let url: URL?
+    let contentMode: ContentMode
+    let showsProgress: Bool
+    @ViewBuilder var placeholder: (String?) -> Placeholder
+
+    @State private var loaded: PlatformImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image = loaded ?? url.flatMap({ ImageStore.shared.cached($0) }) {
+                Image(platformImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            } else if failed {
+                placeholder("photo.badge.exclamationmark")
+            } else if showsProgress {
+                placeholder(nil)
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: url) { await load() }
+    }
+
+    private func load() async {
+        guard let url else { return }
+        // Straight from the cache is not worth a state change or a fade.
+        if ImageStore.shared.cached(url) != nil { return }
+
+        let image = await ImageStore.shared.image(for: url)
+        guard !Task.isCancelled else { return }
+        if let image {
+            withAnimation(.easeOut(duration: 0.28)) { loaded = image }
+        } else {
+            failed = true
         }
     }
 }

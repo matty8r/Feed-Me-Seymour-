@@ -193,7 +193,12 @@ struct TimelinePane: View {
                 .onChange(of: model.selectedArticleID) { _, id in
                     // Keep the current article on screen when the keyboard,
                     // rather than the mouse, is what moved it.
-                    guard let id else { return }
+                    //
+                    // Only while the list is actually the thing on screen: it
+                    // stays in the hierarchy behind the reader at zero opacity,
+                    // and animating a scroll through it on every J/K press is
+                    // work nobody can see.
+                    guard let id, !model.isReaderExpanded else { return }
                     withAnimation(.easeOut(duration: 0.18)) {
                         scroller.scrollTo(id, anchor: .center)
                     }

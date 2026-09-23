@@ -48,7 +48,6 @@ struct ArticleReaderView: View {
             isFocused = true
             render()
         }
-        .animation(.easeInOut(duration: 0.22), value: article.persistentModelID)
         .onChange(of: article.persistentModelID) { _, _ in
             scrollProgress = 0
             render()
@@ -208,6 +207,9 @@ struct ArticleReaderView: View {
             // dissolve into the new.
             .id(article.persistentModelID)
             .transition(.opacity)
+            // Scoped to the body. On the whole view it dragged the toolbar and
+            // the progress bar into every article change too.
+            .animation(.easeInOut(duration: 0.18), value: article.persistentModelID)
     }
 
     private var renderedBody: some View {
