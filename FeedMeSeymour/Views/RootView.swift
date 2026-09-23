@@ -21,6 +21,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var exportDocument: OPMLDocument?
+    @State private var remoteChangeTask: Task<Void, Never>?
 
     private var palette: Palette {
         Palette(theme: settings.theme, colorScheme: colorScheme)
@@ -104,8 +105,22 @@ struct RootView: View {
                 .publisher(for: .NSPersistentStoreRemoteChange)
                 .receive(on: RunLoop.main)
         ) { _ in
-            // CloudKit pulled something down.
-            Task { await synchronize() }
+            // CloudKit pulled something down — but so does our own save, and
+            // this notification cannot tell the two apart. Answering it
+            // immediately had reconcile feeding itself about twenty times a
+            // second, forever, which redrew every row in the timeline each
+            // pass and held a core at 100% with the app sitting idle.
+            //
+            // Coalescing the burst is half of it; the other half is that
+            // reconcile no longer saves a context it did not change, so a
+            // round that finds nothing to do ends the chain instead of
+            // ringing the bell again.
+            remoteChangeTask?.cancel()
+            remoteChangeTask = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                await synchronize()
+            }
         }
         .modifier(SettingsSheetModifier())
     }

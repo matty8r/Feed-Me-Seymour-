@@ -100,7 +100,11 @@ final class SyncCoordinator {
         pruneStates(context: context, now: now)
 
         do {
-            try context.save()
+            // Only when there is something to write. An unconditional save
+            // posts a store-change notification, which is what wakes the next
+            // reconcile — so a pass that changed nothing has to stay quiet or
+            // the two of them talk forever.
+            if context.hasChanges { try context.save() }
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -251,10 +255,19 @@ final class SyncCoordinator {
 
             // Whoever wrote last owns the descriptive fields; they are only
             // there so a favourite can be shown before its article arrives.
+            //
+            // Only where the value actually differs. SwiftData marks a
+            // property dirty on assignment, equal or not, and for a
+            // never-starred article both star clocks are `.distantPast`, so
+            // the test below is true for every article every time. Writing
+            // those three fields back over themselves left the context dirty
+            // on every pass, and a dirty context is a save, and a save posts
+            // the store-change notification that starts the next reconcile.
             if article.stateUpdatedAt >= state.updatedAt || article.starUpdatedAt >= state.starUpdatedAt {
-                state.title = article.title
-                state.articleURLString = article.url?.absoluteString
-                state.publishedAt = article.publishedAt
+                let articleURLString = article.url?.absoluteString
+                if state.title != article.title { state.title = article.title }
+                if state.articleURLString != articleURLString { state.articleURLString = articleURLString }
+                if state.publishedAt != article.publishedAt { state.publishedAt = article.publishedAt }
             }
         }
 

@@ -424,3 +424,129 @@ struct FavoriteClockTests {
         #expect(!article.isStarred, "an explicit unstar is a decision and must survive")
     }
 }
+
+/// The reconcile pass answers `NSPersistentStoreRemoteChange`, and its own
+/// save posts one of those. So a pass that finds nothing to do must not save —
+/// otherwise it wakes itself, forever. That is not a hypothetical: it held a
+/// core at 100% with the app sitting idle, because every save invalidated the
+/// store and redrew every row in the timeline.
+///
+/// Checking `context.hasChanges` after a pass proves nothing, since the pass
+/// saves what it wrote. What has to be counted is the save itself.
+@MainActor
+@Suite("Reconcile settles")
+struct ReconcileIdempotenceTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(Persistence.makeInMemoryContainer())
+    }
+
+    private func makeCoordinator() -> SyncCoordinator {
+        let defaults = UserDefaults(suiteName: "settle.tests.\(UUID().uuidString)")!
+        let coordinator = SyncCoordinator(isCloudBacked: true, defaults: defaults)
+        coordinator.isEnabled = true
+        return coordinator
+    }
+
+    /// How many times anything saved while `work` ran.
+    private func countingSaves(_ work: () -> Void) -> Int {
+        let counter = SaveCounter()
+        let token = NotificationCenter.default.addObserver(
+            forName: .NSManagedObjectContextWillSave,
+            object: nil,
+            queue: nil
+        ) { _ in counter.bump() }
+        defer { NotificationCenter.default.removeObserver(token) }
+        work()
+        return counter.value
+    }
+
+    private final class SaveCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        func bump() { lock.lock(); count += 1; lock.unlock() }
+        var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+    }
+
+    private func populate(_ context: ModelContext) {
+        let feed = Feed(feedURL: URL(string: "https://example.com/feed")!, title: "Gazette")
+        context.insert(feed)
+
+        for index in 0..<8 {
+            let article = Article(
+                guid: "item-\(index)",
+                title: "Feed Me \(index)",
+                url: URL(string: "https://example.com/\(index)"),
+                publishedAt: Date().addingTimeInterval(-Double(index) * 60)
+            )
+            context.insert(article)
+            article.feed = feed
+            // A mix of touched and untouched, so both the insert path and the
+            // merge path are exercised.
+            if index % 2 == 0 { article.setRead(true) }
+            if index % 4 == 0 { article.toggleStar() }
+        }
+        try? context.save()
+    }
+
+    @Test("A second pass over unchanged data does not save")
+    func secondPassDoesNotSave() {
+        let context = makeContext()
+        populate(context)
+        let coordinator = makeCoordinator()
+
+        let first = countingSaves { coordinator.reconcile(in: context) }
+        #expect(first > 0, "the first pass has mirrors to write")
+
+        let second = countingSaves { coordinator.reconcile(in: context) }
+        #expect(second == 0, "a settled store must not be written again")
+    }
+
+    /// The specific shape that caused it: an article nobody ever starred, so
+    /// both star clocks sit at `.distantPast` and every `>=` comparison
+    /// between them is true.
+    @Test("An unstarred article does not rewrite its mirror on every pass")
+    func unstarredArticleSettles() {
+        let context = makeContext()
+        let feed = Feed(feedURL: URL(string: "https://example.com/feed")!, title: "Gazette")
+        context.insert(feed)
+
+        let article = Article(guid: "item-1", title: "Suddenly Seymour", publishedAt: .now)
+        context.insert(article)
+        article.feed = feed
+        article.setRead(true)
+        try? context.save()
+
+        let coordinator = makeCoordinator()
+        coordinator.reconcile(in: context)
+        #expect(article.starUpdatedAt == .distantPast)
+
+        let second = countingSaves { coordinator.reconcile(in: context) }
+        #expect(second == 0)
+    }
+
+    @Test("Real news still gets through after the store has settled")
+    func stillAdoptsRemoteChanges() {
+        let context = makeContext()
+        populate(context)
+        let coordinator = makeCoordinator()
+
+        coordinator.reconcile(in: context)
+        #expect(countingSaves { coordinator.reconcile(in: context) } == 0)
+
+        // Another device stars something this one has not.
+        let state = SyncedArticleState(feedURLString: "https://example.com/feed", guid: "item-3")
+        state.isStarred = true
+        state.starredAt = .now
+        state.starUpdatedAt = .now
+        state.updatedAt = .now
+        state.title = "Feed Me 3"
+        context.insert(state)
+        try? context.save()
+
+        coordinator.reconcile(in: context)
+
+        let adopted = (try? context.fetch(FetchDescriptor<Article>()))?.first { $0.guid == "item-3" }
+        #expect(adopted?.isStarred == true)
+    }
+}
