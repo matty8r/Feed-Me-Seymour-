@@ -29,6 +29,30 @@ struct ArticleContentParser {
 
     // MARK: - Post-processing
 
+    /// The first real picture in an entry's own HTML.
+    ///
+    /// Plenty of feeds carry no thumbnail of their own — no media:thumbnail, no
+    /// itunes:image, no image enclosure — and put the picture in the entry body
+    /// instead, which is where most of the web's writing keeps it. Reuses the
+    /// same URL resolution and the same junk filter as the reader, so what the
+    /// timeline shows is the picture the article opens with, and stops at the
+    /// first hit rather than building the whole document.
+    static func leadImageURL(inHTML html: String, baseURL: URL?) -> URL? {
+        for token in HTMLTokenizer.tokenize(html) {
+            guard case .startTag(let name, let attributes, _) = token,
+                  name == "img" || name == "source" else { continue }
+            guard let url = Builder.mediaURL(from: attributes, baseURL: baseURL) else { continue }
+
+            var candidate = ImageMedia(url: url)
+            candidate.pixelWidth = attributes["width"].flatMap { Int($0.filter(\.isNumber)) }
+            candidate.pixelHeight = attributes["height"].flatMap { Int($0.filter(\.isNumber)) }
+            guard !candidate.isProbablyDecorative else { continue }
+
+            return url
+        }
+        return nil
+    }
+
     static func tidy(_ blocks: [ArticleBlock]) -> [ArticleBlock] {
         var cleaned: [ArticleBlock] = []
 

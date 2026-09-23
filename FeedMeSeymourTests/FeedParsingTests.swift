@@ -195,3 +195,90 @@ struct FeedParsingTests {
         #expect(parsed.contains { $0.feedURL.absoluteString == "https://feeds.kottke.org/main" })
     }
 }
+
+// MARK: - Lead images
+
+@Suite("Lead images")
+struct LeadImageTests {
+
+    private func item(_ xml: String) -> ParsedItem? {
+        try? FeedParser.parse(data: Data(xml.utf8)).items.first
+    }
+
+    private func rss(_ body: String) -> String {
+        """
+        <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+        <channel><title>A feed</title><item>
+        <title>An entry</title><link>https://example.com/post</link>
+        \(body)
+        </item></channel></rss>
+        """
+    }
+
+    @Test("A feed that names its own thumbnail keeps it")
+    func explicitThumbnailWins() {
+        let parsed = item(rss("""
+        <media:thumbnail url="https://example.com/named.jpg"/>
+        <description><![CDATA[<p><img src="https://example.com/inline.jpg"></p>]]></description>
+        """))
+        #expect(parsed?.bannerImageURL?.absoluteString == "https://example.com/named.jpg")
+    }
+
+    @Test("Otherwise the first picture in the entry is used")
+    func fallsBackToContent() {
+        let parsed = item(rss("""
+        <description><![CDATA[<p>Words first.</p><p><img src="https://example.com/hero.jpg" width="800" height="600"></p>]]></description>
+        """))
+        #expect(parsed?.bannerImageURL?.absoluteString == "https://example.com/hero.jpg")
+    }
+
+    @Test("Relative sources resolve against the entry")
+    func resolvesRelative() {
+        let parsed = item(rss("""
+        <description><![CDATA[<img src="/images/hero.jpg">]]></description>
+        """))
+        #expect(parsed?.bannerImageURL?.absoluteString == "https://example.com/images/hero.jpg")
+    }
+
+    @Test("srcset picks the widest, like the reader does")
+    func picksWidestInSrcset() {
+        let parsed = item(rss("""
+        <description><![CDATA[<img srcset="small.jpg 320w, large.jpg 1600w" src="small.jpg">]]></description>
+        """))
+        #expect(parsed?.bannerImageURL?.absoluteString == "https://example.com/large.jpg")
+    }
+
+    @Test("Tracking pixels are passed over for the real picture")
+    func skipsTrackingPixels() {
+        let parsed = item(rss("""
+        <description><![CDATA[
+        <img src="https://feedburner.com/~ff/beacon.gif" width="1" height="1">
+        <img src="https://example.com/spacer.gif">
+        <img src="https://example.com/real.jpg">
+        ]]></description>
+        """))
+        #expect(parsed?.bannerImageURL?.absoluteString == "https://example.com/real.jpg")
+    }
+
+    @Test("An entry with no pictures gets no thumbnail")
+    func noImages() {
+        let parsed = item(rss("<description><![CDATA[<p>Only words.</p>]]></description>"))
+        #expect(parsed?.bannerImageURL == nil)
+    }
+
+    @Test("A data: URI is not a thumbnail")
+    func skipsDataURIs() {
+        let parsed = item(rss("""
+        <description><![CDATA[<img src="data:image/gif;base64,R0lGODlhAQAB"><img src="https://example.com/real.jpg">]]></description>
+        """))
+        #expect(parsed?.bannerImageURL?.absoluteString == "https://example.com/real.jpg")
+    }
+
+    @Test("A lazy-loaded image still counts")
+    func lazyLoaded() {
+        let parsed = item(rss("""
+        <description><![CDATA[<img data-src="https://example.com/lazy.jpg">]]></description>
+        """))
+        #expect(parsed?.bannerImageURL?.absoluteString == "https://example.com/lazy.jpg")
+    }
+}

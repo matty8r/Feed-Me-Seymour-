@@ -29,6 +29,14 @@ struct ParsedItem: Sendable {
     var attachments: [ParsedAttachment] = []
     var tags: [String] = []
 
+    /// Fall back to the entry's own HTML when the feed named no image of its
+    /// own. Called once as each item finishes parsing, which is off the main
+    /// actor — the merge that follows is not the place to be tokenising HTML.
+    mutating func resolveBannerImage() {
+        guard bannerImageURL == nil, let html = contentHTML ?? summaryHTML else { return }
+        bannerImageURL = ArticleContentParser.leadImageURL(inHTML: html, baseURL: url)
+    }
+
     /// Identity within its feed. Publishers are inconsistent, so fall back in order.
     func stableID() -> String {
         if let guid = guid?.trimmed, !guid.isEmpty { return guid }

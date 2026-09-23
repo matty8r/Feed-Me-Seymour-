@@ -97,6 +97,7 @@ enum JSONFeedParser {
                     byteCount: attachment.size_in_bytes
                 )
             }
+            item.resolveBannerImage()
             return item
         }
         return feed

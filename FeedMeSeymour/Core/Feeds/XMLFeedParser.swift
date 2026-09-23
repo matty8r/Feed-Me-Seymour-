@@ -410,6 +410,7 @@ extension XMLFeedParser: XMLParserDelegate {
             finished.title = HTMLTextExtractor.plainText(from: summary).truncated(to: 80)
         }
         finished.tags = Array(Set(finished.tags)).sorted()
+        finished.resolveBannerImage()
         feed.items.append(finished)
     }
 
