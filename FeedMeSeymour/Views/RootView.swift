@@ -82,7 +82,7 @@ struct RootView: View {
         }
         .task { await firstRun() }
         .onOpenURL { open($0) }
-        .onAppear { collectSharedSubscription() }
+        .onAppear { collectSharedSubscriptions() }
         .onReceive(NotificationCenter.default.publisher(for: .refreshAll)) { _ in
             Task { await model.refresher.refreshAll(in: context) }
         }
@@ -97,7 +97,7 @@ struct RootView: View {
             case .active:
                 // A page shared while the app was in the background is waiting
                 // in the group container; this is the moment it can be acted on.
-                collectSharedSubscription()
+                collectSharedSubscriptions()
                 Task {
                     await synchronize()
                     await refreshIfStale()
@@ -160,13 +160,45 @@ struct RootView: View {
     /// shared from Safari. The extension does no more than pass the address
     /// along; finding the feed behind it is this side's job, and the add sheet
     /// already does that.
-    /// A page handed over by the share extension. It cannot open the app
-    /// itself on iOS, so it leaves the address in the shared group and the app
-    /// picks it up the next time it is in front of someone.
-    private func collectSharedSubscription() {
-        guard let shared = SharedInbox.collect() else { return }
-        model.pendingSubscriptionURL = shared
-        model.isShowingAddSubscription = true
+    /// Subscriptions the share extension took on. It resolved each one to a
+    /// real feed and told the reader it was done, so there is nothing left to
+    /// ask — they are written straight in, and the sheet stays shut.
+    ///
+    /// Cleared only once saved. A queue that emptied itself on read would lose
+    /// the lot if the save threw.
+    private func collectSharedSubscriptions() {
+        let waiting = SharedInbox.pending()
+        guard !waiting.isEmpty else { return }
+
+        let existing = Set(((try? context.fetch(FetchDescriptor<Feed>())) ?? []).map(\.feedURL))
+        let nextIndex = (((try? context.fetch(FetchDescriptor<Feed>())) ?? []).map(\.sortIndex).max() ?? -1) + 1
+
+        var added: [Feed] = []
+        for (offset, pending) in waiting.enumerated() {
+            guard let url = URL(string: pending.feedURL), !existing.contains(url) else { continue }
+            let feed = Feed(
+                feedURL: url,
+                title: pending.title,
+                homePageURL: pending.homePageURL.flatMap(URL.init(string:)),
+                iconURL: pending.iconURL.flatMap(URL.init(string:)),
+                sortIndex: nextIndex + offset
+            )
+            context.insert(feed)
+            added.append(feed)
+        }
+
+        do {
+            try context.save()
+            SharedInbox.clear(waiting)
+        } catch {
+            return
+        }
+
+        guard !added.isEmpty else { return }
+        model.showStatus(added.count == 1
+                         ? "Added \(added[0].displayTitle)."
+                         : "Added \(added.count) subscriptions.")
+        Task { await model.refresher.refresh(added, in: context) }
     }
 
     private func open(_ url: URL) {

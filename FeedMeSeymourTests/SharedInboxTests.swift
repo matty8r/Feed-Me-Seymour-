@@ -2,10 +2,9 @@
 //  SharedInboxTests.swift
 //  Feed Me, Seymour! Tests
 //
-//  The handover between the share extension and the app. The crossing itself
-//  needs two processes and a provisioned app group, so what is tested here is
-//  the part that can go wrong on either side of it: that an address survives
-//  the trip once, and only once, and does not turn up days later.
+//  The queue between the share extension and the app. The crossing itself
+//  needs two processes and a provisioned app group; what is tested here is the
+//  part that can go wrong on either side of it.
 //
 
 import Testing
@@ -15,54 +14,61 @@ import Foundation
 @Suite("Shared inbox")
 struct SharedInboxTests {
 
-    /// The real suite is the app group, which tests cannot reach. The rules
-    /// are the same either way.
     private func makeDefaults() -> UserDefaults {
-        let suite = "inbox.tests.\(UUID().uuidString)"
-        return UserDefaults(suiteName: suite)!
+        UserDefaults(suiteName: "inbox.tests.\(UUID().uuidString)")!
     }
 
-    @Test("An address handed over is collected once")
-    func handOverAndCollect() {
+    private func pending(_ url: String, _ title: String) -> PendingSubscription {
+        PendingSubscription(feedURL: url, title: title, homePageURL: nil, iconURL: nil, addedAt: .now)
+    }
+
+    @Test("A subscription waits until the app saves it")
+    func addAndRead() {
         let defaults = makeDefaults()
-        SharedInbox.hand(over: URL(string: "https://kottke.org")!, into: defaults)
+        SharedInbox.add(pending("https://kottke.org/feed", "Kottke"), to: defaults)
 
-        #expect(SharedInbox.collect(from: defaults) == "https://kottke.org")
-        #expect(SharedInbox.collect(from: defaults) == nil, "collecting empties it")
+        #expect(SharedInbox.pending(in: defaults).map(\.title) == ["Kottke"])
+        #expect(SharedInbox.pending(in: defaults).count == 1, "reading does not consume it")
     }
 
-    @Test("Nothing waiting collects nothing")
-    func emptyInbox() {
-        #expect(SharedInbox.collect(from: makeDefaults()) == nil)
-    }
-
-    /// Shared last Tuesday and never opened. Springing a sheet for it now
-    /// would be a surprise rather than a convenience.
-    @Test("A stale address is dropped rather than acted on")
-    func staleAddress() {
+    /// Reading must not empty the queue: if the save throws, the subscription
+    /// has to still be there next time.
+    @Test("Clearing takes only what was saved")
+    func clearsOnlySaved() {
         let defaults = makeDefaults()
-        SharedInbox.hand(over: URL(string: "https://kottke.org")!, into: defaults)
-        defaults.set(Date.now.timeIntervalSince1970 - 3600, forKey: SharedInbox.stampKey)
+        let kottke = pending("https://kottke.org/feed", "Kottke")
+        let df = pending("https://daringfireball.net/feeds/main", "Daring Fireball")
+        SharedInbox.add(kottke, to: defaults)
+        SharedInbox.add(df, to: defaults)
 
-        #expect(SharedInbox.collect(from: defaults) == nil)
+        SharedInbox.clear([kottke], in: defaults)
+
+        #expect(SharedInbox.pending(in: defaults).map(\.title) == ["Daring Fireball"])
     }
 
-    @Test("A stale address is still cleared out")
-    func staleAddressIsCleared() {
+    @Test("Sharing the same site twice queues it once")
+    func noDuplicates() {
         let defaults = makeDefaults()
-        SharedInbox.hand(over: URL(string: "https://kottke.org")!, into: defaults)
-        defaults.set(Date.now.timeIntervalSince1970 - 3600, forKey: SharedInbox.stampKey)
+        SharedInbox.add(pending("https://kottke.org/feed", "Kottke"), to: defaults)
+        SharedInbox.add(pending("https://kottke.org/feed", "Kottke dot org"), to: defaults)
 
-        _ = SharedInbox.collect(from: defaults)
-        #expect(defaults.string(forKey: SharedInbox.key) == nil)
+        let waiting = SharedInbox.pending(in: defaults)
+        #expect(waiting.count == 1)
+        #expect(waiting.first?.title == "Kottke dot org", "the newer title wins")
     }
 
-    @Test("The newer of two shares wins")
-    func newerWins() {
+    @Test("Several different sites all wait their turn")
+    func keepsSeveral() {
         let defaults = makeDefaults()
-        SharedInbox.hand(over: URL(string: "https://kottke.org")!, into: defaults)
-        SharedInbox.hand(over: URL(string: "https://daringfireball.net")!, into: defaults)
+        SharedInbox.add(pending("https://a.example/feed", "A"), to: defaults)
+        SharedInbox.add(pending("https://b.example/feed", "B"), to: defaults)
+        SharedInbox.add(pending("https://c.example/feed", "C"), to: defaults)
 
-        #expect(SharedInbox.collect(from: defaults) == "https://daringfireball.net")
+        #expect(SharedInbox.pending(in: defaults).map(\.title) == ["A", "B", "C"])
+    }
+
+    @Test("Nothing waiting reads as nothing")
+    func empty() {
+        #expect(SharedInbox.pending(in: makeDefaults()).isEmpty)
     }
 }

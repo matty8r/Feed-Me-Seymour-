@@ -2,57 +2,69 @@
 //  SharedInbox.swift
 //  Feed Me, Seymour!
 //
-//  The one thing the share extension and the app both touch: an address handed
-//  from one to the other. Compiled into both.
+//  What the share extension and the app both touch: subscriptions the
+//  extension has taken on, waiting for the app to write them into the library.
+//  Compiled into both.
 //
-//  A single value rather than a queue. Sharing two pages before opening the app
-//  is not a thing anyone does on purpose, and a queue would need the app to
-//  present a sheet per entry; the newer address simply wins.
+//  The extension does the finding — it resolves the site to an actual feed
+//  over the network and confirms it on the spot — but it cannot write to the
+//  library, which is a SwiftData store the app alone opens. So it records what
+//  it settled on, and the app materialises it the next time it runs. From the
+//  reader's side the subscription is made the moment the sheet says so; all
+//  that is outstanding is a row.
 //
 
 import Foundation
 
+/// A subscription the extension resolved and the reader accepted.
+struct PendingSubscription: Codable, Equatable, Sendable {
+    var feedURL: String
+    var title: String
+    var homePageURL: String?
+    var iconURL: String?
+    var addedAt: Date
+}
+
 enum SharedInbox {
 
-    /// Both targets carry this in their entitlements.
+    /// Both targets carry this in their iOS entitlements.
     static let appGroup = "group.com.backyard.feedmeseymour"
 
-    static let key = "sharedSubscriptionURL"
-    static let stampKey = "sharedSubscriptionDate"
-
-    /// Anything older than this was shared in a session the reader has long
-    /// since forgotten about, and springing a sheet on them for it would be a
-    /// surprise rather than a convenience.
-    private static let freshness: TimeInterval = 5 * 60
+    static let key = "pendingSubscriptions"
 
     private static var defaults: UserDefaults? {
         UserDefaults(suiteName: appGroup)
     }
 
-    static func hand(over url: URL) {
+    static func add(_ subscription: PendingSubscription) {
         guard let defaults else { return }
-        hand(over: url, into: defaults)
+        add(subscription, to: defaults)
     }
 
-    static func hand(over url: URL, into defaults: UserDefaults) {
-        defaults.set(url.absoluteString, forKey: key)
-        defaults.set(Date.now.timeIntervalSince1970, forKey: stampKey)
+    static func add(_ subscription: PendingSubscription, to defaults: UserDefaults) {
+        var waiting = pending(in: defaults)
+        // Sharing the same site twice should not queue it twice.
+        waiting.removeAll { $0.feedURL == subscription.feedURL }
+        waiting.append(subscription)
+        write(waiting, to: defaults)
     }
 
-    /// Reads and clears. Returns nil when there is nothing waiting, or when
-    /// what is waiting has gone stale.
-    static func collect() -> String? {
-        guard let defaults else { return nil }
-        return collect(from: defaults)
+    /// Everything waiting, oldest first. Reads without clearing, so a failure
+    /// to write them into the library does not lose them.
+    static func pending(in defaults: UserDefaults? = SharedInbox.defaults) -> [PendingSubscription] {
+        guard let defaults, let data = defaults.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([PendingSubscription].self, from: data)) ?? []
     }
 
-    static func collect(from defaults: UserDefaults) -> String? {
-        guard let address = defaults.string(forKey: key) else { return nil }
-        let stamp = defaults.double(forKey: stampKey)
-        defaults.removeObject(forKey: key)
-        defaults.removeObject(forKey: stampKey)
+    /// Called once the app has actually saved them.
+    static func clear(_ saved: [PendingSubscription], in defaults: UserDefaults? = SharedInbox.defaults) {
+        guard let defaults else { return }
+        let savedURLs = Set(saved.map(\.feedURL))
+        write(pending(in: defaults).filter { !savedURLs.contains($0.feedURL) }, to: defaults)
+    }
 
-        guard stamp > 0, Date.now.timeIntervalSince1970 - stamp < freshness else { return nil }
-        return address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : address
+    private static func write(_ list: [PendingSubscription], to defaults: UserDefaults) {
+        guard let data = try? JSONEncoder().encode(list) else { return }
+        defaults.set(data, forKey: key)
     }
 }

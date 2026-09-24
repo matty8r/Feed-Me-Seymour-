@@ -2,17 +2,19 @@
 //  ShareViewController.swift
 //  Feed Me, Seymour! — Share Extension
 //
-//  Share a page from Safari and it becomes a subscription. The extension does
-//  the smallest possible amount of work: it pulls the address out of whatever
-//  was shared and leaves it where the app will find it. Finding the feed behind
-//  a site, and saving it, stay in the app, which already knows how.
+//  Share a page and subscribe to it without leaving what you were reading.
 //
-//  It goes through a shared app group rather than opening the app directly.
-//  `extensionContext.open` is sanctioned for only a couple of extension kinds,
-//  and from a share extension it fails without saying so — the sheet dismisses,
-//  the app never launches, and nothing has happened. A handed-over address in
-//  the group survives that, and the app picks it up the moment it is next in
-//  front of you.
+//  On iOS the extension does the work: it resolves the site to an actual feed
+//  over the network — the same discovery the app uses, compiled in here too —
+//  shows what it found, and takes the subscription on. Writing the row is left
+//  to the app, which is the only side that opens the library, but that is
+//  bookkeeping: by the time the sheet says "Subscribed" the decision is made
+//  and recorded where it cannot be lost.
+//
+//  On the Mac none of this is needed. An extension there may open its own app,
+//  so it does, and the app's own Add sheet takes over — which is better than a
+//  panel inside the share menu, and keeps the Mac build free of the app group
+//  and the provisioning that would come with it.
 //
 
 import Foundation
@@ -20,59 +22,27 @@ import UniformTypeIdentifiers
 
 #if os(iOS)
 import UIKit
-typealias ShareHostController = UIViewController
-#else
-import AppKit
-typealias ShareHostController = NSViewController
-#endif
+import SwiftUI
 
-final class ShareViewController: ShareHostController {
+final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        Task { await handOff() }
-    }
 
-    #if os(macOS)
-    override func loadView() {
-        // A share extension on the Mac must have a view even when it never
-        // shows one; without it the host has nothing to present and the
-        // extension is torn down before `viewDidLoad` runs.
-        view = NSView(frame: .zero)
-    }
-    #endif
+        let panel = SharePanel(
+            load: { [weak self] in await self?.sharedURL() ?? nil },
+            done: { [weak self] in
+                self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+            }
+        )
 
-    private func handOff() async {
-        guard let url = await sharedURL() else {
-            finish()
-            return
-        }
-        #if os(macOS)
-        // The Mac lets an extension open its own app, so it does — the sheet
-        // comes up while the page is still in front of you. No shared group is
-        // needed for this, which is why the Mac build does not ask for one.
-        NSWorkspace.shared.open(handOffURL(for: url))
-        finish()
-        #else
-        // iOS does not: `extensionContext.open` is sanctioned for only a couple
-        // of extension kinds and from here does nothing at all, silently. So
-        // the address is left in the shared group for the app to collect.
-        SharedInbox.hand(over: url)
-        finish()
-        #endif
-    }
-
-    /// `feedmeseymour://add?url=…`, which the app answers.
-    private func handOffURL(for url: URL) -> URL {
-        var components = URLComponents()
-        components.scheme = "feedmeseymour"
-        components.host = "add"
-        components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
-        return components.url ?? url
-    }
-
-    private func finish() {
-        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+        let host = UIHostingController(rootView: panel)
+        addChild(host)
+        host.view.frame = view.bounds
+        host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        host.view.backgroundColor = .clear
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
     }
 
     /// Safari offers a page as a URL; other hosts sometimes offer only the
@@ -95,3 +65,54 @@ final class ShareViewController: ShareHostController {
         return nil
     }
 }
+
+#else
+
+import AppKit
+
+final class ShareViewController: NSViewController {
+
+    override func loadView() {
+        // A share extension on the Mac must have a view even when it never
+        // shows one; without it the host has nothing to present and the
+        // extension is torn down before `viewDidLoad` runs.
+        view = NSView(frame: .zero)
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        Task { await handOff() }
+    }
+
+    private func handOff() async {
+        if let url = await sharedURL() {
+            var components = URLComponents()
+            components.scheme = "feedmeseymour"
+            components.host = "add"
+            components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
+            if let destination = components.url {
+                NSWorkspace.shared.open(destination)
+            }
+        }
+        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+    }
+
+    private func sharedURL() async -> URL? {
+        let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
+        for item in items {
+            for provider in item.attachments ?? [] {
+                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
+                   let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
+                    return url
+                }
+                if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
+                   let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String,
+                   let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
+}
+#endif
