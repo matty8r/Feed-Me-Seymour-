@@ -86,6 +86,11 @@ struct TimelinePane: View {
             // ArticleRowView, for rows nobody could see.
             if !model.isReaderExpanded {
                 timelineList(articles)
+                    // Searching belongs to the timeline, so it is attached to
+                    // the timeline rather than to the pane. Hung on the pane it
+                    // stayed in the toolbar behind the reader, offering to
+                    // filter a list that was no longer on screen.
+                    .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search Articles")
                     .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .center)))
             }
 
@@ -107,7 +112,6 @@ struct TimelinePane: View {
         .toolbar(model.isReaderExpanded ? .hidden : .visible, for: .navigationBar)
         #endif
         .toolbar { if !model.isReaderExpanded { timelineToolbar(articles) } }
-        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search Articles")
         .onChange(of: articles.map(\.persistentModelID)) { _, ids in
             model.visibleArticleIDs = ids
         }

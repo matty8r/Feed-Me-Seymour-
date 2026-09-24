@@ -38,6 +38,11 @@ struct ArticleReaderView: View {
             progressBar
             Divider().opacity(0.35)
             scrollingBody
+            #if os(iOS)
+            // Where the search field used to sit. On the Mac these two stay in
+            // the top bar, within easy reach of the pointer and of J and K.
+            articleNavigationBar
+            #endif
         }
         .background(palette.paper)
         .environment(\.typography, typography)
@@ -82,7 +87,7 @@ struct ArticleReaderView: View {
             Button {
                 model.collapse()
             } label: {
-                Label("Back to Timeline", systemImage: Platform.isMac ? "chevron.left" : "chevron.down")
+                Label("Close Article", systemImage: "xmark")
                     .labelStyle(.iconOnly)
                     .closeGlyph()
             }
@@ -107,6 +112,7 @@ struct ArticleReaderView: View {
             // what you do with the article once you're there. Everything else
             // is one tap away under the ellipsis.
             HStack(spacing: 0) {
+                #if os(macOS)
                 Button { model.goToPrevious() } label: {
                     Image(systemName: "chevron.up").barGlyph()
                 }
@@ -124,6 +130,7 @@ struct ArticleReaderView: View {
                 Divider()
                     .frame(height: 16)
                     .padding(.horizontal, 6)
+                #endif
 
                 StarButton(isStarred: article.isStarred, size: BarGlyph.size, idleTint: \.ink) {
                     toggleStar()
@@ -183,6 +190,61 @@ struct ArticleReaderView: View {
         guard let summary = article.plainSummary.nilIfEmpty else { return nil }
         return Text(summary.truncated(to: 180))
     }
+
+    #if os(iOS)
+    /// Moving between articles, put where a thumb already is. The same two
+    /// moves as pulling past either end of the article — that gesture is
+    /// quicker once you know it, and this is how you find out it exists.
+    private var articleNavigationBar: some View {
+        VStack(spacing: 0) {
+            Divider().opacity(0.35)
+            HStack(spacing: 0) {
+                navigationButton(
+                    title: "Previous",
+                    symbol: "chevron.left",
+                    isEnabled: model.canGoToPrevious,
+                    alignment: .leading
+                ) { model.goToPrevious() }
+
+                navigationButton(
+                    title: "Next",
+                    symbol: "chevron.right",
+                    isEnabled: model.canGoToNext,
+                    alignment: .trailing
+                ) { model.goToNext() }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+        }
+        .background(palette.paper)
+    }
+
+    private func navigationButton(title: String,
+                                  symbol: String,
+                                  isEnabled: Bool,
+                                  alignment: HorizontalAlignment,
+                                  action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if alignment == .leading {
+                    Image(systemName: symbol)
+                    Text(title)
+                } else {
+                    Text(title)
+                    Image(systemName: symbol)
+                }
+            }
+            .font(.system(size: BarGlyph.size, weight: BarGlyph.weight))
+            .foregroundStyle(isEnabled ? palette.ink : palette.tertiaryInk)
+            .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+            .frame(height: BarGlyph.hit.height)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel(alignment == .leading ? "Previous Article" : "Next Article")
+    }
+    #endif
 
     private var progressBar: some View {
         GeometryReader { proxy in

@@ -16,11 +16,11 @@ enum BarGlyph {
     static let weight: Font.Weight = .medium
 
     /// The tappable box around each glyph. A bare SF Symbol is a ~15pt target,
-    /// which is fine with a mouse and hopeless with a thumb.
-    static let hit = CGSize(width: 34, height: 32)
-
-    /// The close chevron outranks the rest of the bar, so it is drawn larger.
-    static let closeSize: CGFloat = 20
+    /// which is fine with a mouse and hopeless with a thumb — so on the phone
+    /// the box is the 44pt Apple asks for. Only the height grows: seven of
+    /// these sit in one row, and 44 points each would not fit across an iPhone
+    /// beside the feed's name.
+    static let hit = CGSize(width: 34, height: Platform.isMac ? 32 : 44)
 }
 
 extension View {
@@ -35,9 +35,10 @@ extension View {
             .contentShape(Rectangle())
     }
 
-    /// The way out of the reader. Deliberately larger than its neighbours —
-    /// it's the one control you reach for without looking.
+    /// The way out of the reader. The same size as everything else in the bar:
+    /// an X at the regular weight already reads as the way out, where an
+    /// oversized chevron only read as an oddly large arrow.
     func closeGlyph() -> some View {
-        barGlyph(size: BarGlyph.closeSize, weight: .semibold, width: 40)
+        barGlyph()
     }
 }
