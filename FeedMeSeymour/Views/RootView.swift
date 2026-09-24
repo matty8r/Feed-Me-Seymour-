@@ -202,13 +202,53 @@ struct RootView: View {
     }
 
     private func open(_ url: URL) {
-        guard url.scheme == "feedmeseymour", url.host() == "add" else { return }
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        guard let shared = components?.queryItems?.first(where: { $0.name == "url" })?.value,
-              !shared.trimmed.isEmpty else { return }
+        guard url.scheme == "feedmeseymour" else { return }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? {
+            items.first { $0.name == name }?.value?.nilIfEmpty
+        }
 
-        model.pendingSubscriptionURL = shared
-        model.isShowingAddSubscription = true
+        switch url.host() {
+        // The Mac share extension, which has already found the feed and been
+        // told to take it. Nothing left to ask, so nothing is asked.
+        case "subscribe":
+            guard let address = value("url"), let feedURL = URL(string: address) else { return }
+            subscribe(
+                to: feedURL,
+                title: value("title") ?? feedURL.host() ?? address,
+                homePage: value("home").flatMap(URL.init(string:)),
+                icon: value("icon").flatMap(URL.init(string:))
+            )
+
+        // A bare address, from somewhere that has not resolved it yet.
+        case "add":
+            guard let shared = value("url") else { return }
+            model.pendingSubscriptionURL = shared
+            model.isShowingAddSubscription = true
+
+        default:
+            break
+        }
+    }
+
+    /// One subscription, already resolved. Shared by the Mac's share extension
+    /// and by the queue iOS leaves behind.
+    @discardableResult
+    private func subscribe(to feedURL: URL, title: String, homePage: URL?, icon: URL?) -> Bool {
+        let existing = Set(((try? context.fetch(FetchDescriptor<Feed>())) ?? []).map(\.feedURL))
+        guard !existing.contains(feedURL) else {
+            model.showStatus("Already subscribed to \(title).")
+            return false
+        }
+
+        let sortIndex = (((try? context.fetch(FetchDescriptor<Feed>())) ?? []).map(\.sortIndex).max() ?? -1) + 1
+        let feed = Feed(feedURL: feedURL, title: title, homePageURL: homePage, iconURL: icon, sortIndex: sortIndex)
+        context.insert(feed)
+        guard (try? context.save()) != nil else { return false }
+
+        model.showStatus("Added \(feed.displayTitle).")
+        Task { await model.refresher.refresh([feed], in: context) }
+        return true
     }
 
     private func firstRun() async {

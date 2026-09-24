@@ -4,45 +4,105 @@
 //
 //  Share a page and subscribe to it without leaving what you were reading.
 //
-//  On iOS the extension does the work: it resolves the site to an actual feed
-//  over the network — the same discovery the app uses, compiled in here too —
-//  shows what it found, and takes the subscription on. Writing the row is left
-//  to the app, which is the only side that opens the library, but that is
-//  bookkeeping: by the time the sheet says "Subscribed" the decision is made
-//  and recorded where it cannot be lost.
+//  Both platforms show the same panel and do the same work: resolve the site
+//  to an actual feed over the network — the app's own discovery, compiled in
+//  here too — show what was found, and take the subscription on a tap.
 //
-//  On the Mac none of this is needed. An extension there may open its own app,
-//  so it does, and the app's own Add sheet takes over — which is better than a
-//  panel inside the share menu, and keeps the Mac build free of the app group
-//  and the provisioning that would come with it.
+//  Only the last step differs. iOS records it in a shared app group for the
+//  app to write in, because an extension there cannot open its own app. The
+//  Mac can, so it hands the resolved feed straight over and the app saves it
+//  while you watch.
+//
+//  An earlier version of the Mac side did the work with no interface at all,
+//  called NSWorkspace.open and completed the request on the next line. Neither
+//  half of that survives: a share extension with a zero-sized view is torn
+//  down by the host before its work finishes, and completing the request kills
+//  the process while the launch is still being dispatched. It looked exactly
+//  like nothing happening.
 //
 
 import Foundation
+import SwiftUI
 import UniformTypeIdentifiers
 
 #if os(iOS)
 import UIKit
-import SwiftUI
+typealias ShareHostController = UIViewController
+typealias ShareHostingController = UIHostingController
+#else
+import AppKit
+typealias ShareHostController = NSViewController
+typealias ShareHostingController = NSHostingController
+#endif
 
-final class ShareViewController: UIViewController {
+final class ShareViewController: ShareHostController {
+
+    #if os(macOS)
+    override func loadView() {
+        // Big enough that the host actually presents it and keeps this process
+        // alive while the feed is being looked up.
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 220))
+    }
+    #endif
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         let panel = SharePanel(
             load: { [weak self] in await self?.sharedURL() ?? nil },
+            subscribe: { [weak self] feed in self?.subscribe(to: feed) },
+            isWaiting: { feed in
+                #if os(iOS)
+                SharedInbox.pending().contains { $0.feedURL == feed.url.absoluteString }
+                #else
+                false
+                #endif
+            },
             done: { [weak self] in
                 self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
             }
         )
 
-        let host = UIHostingController(rootView: panel)
+        let host = ShareHostingController(rootView: panel)
         addChild(host)
+        #if os(iOS)
         host.view.frame = view.bounds
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         host.view.backgroundColor = .clear
         view.addSubview(host.view)
         host.didMove(toParent: self)
+        #else
+        host.view.frame = view.bounds
+        host.view.autoresizingMask = [.width, .height]
+        view.addSubview(host.view)
+        #endif
+    }
+
+    private func subscribe(to feed: DiscoveredFeed) {
+        #if os(iOS)
+        SharedInbox.add(
+            PendingSubscription(
+                feedURL: feed.url.absoluteString,
+                title: feed.title,
+                homePageURL: feed.homePageURL?.absoluteString,
+                iconURL: feed.iconURL?.absoluteString,
+                addedAt: .now
+            )
+        )
+        #else
+        var components = URLComponents()
+        components.scheme = "feedmeseymour"
+        components.host = "subscribe"
+        components.queryItems = [
+            URLQueryItem(name: "url", value: feed.url.absoluteString),
+            URLQueryItem(name: "title", value: feed.title),
+            URLQueryItem(name: "home", value: feed.homePageURL?.absoluteString),
+            URLQueryItem(name: "icon", value: feed.iconURL?.absoluteString)
+        ]
+        guard let destination = components.url else { return }
+        // The app is opened before this process goes away, not alongside it.
+        NSWorkspace.shared.open(destination)
+        #endif
     }
 
     /// Safari offers a page as a URL; other hosts sometimes offer only the
@@ -65,54 +125,3 @@ final class ShareViewController: UIViewController {
         return nil
     }
 }
-
-#else
-
-import AppKit
-
-final class ShareViewController: NSViewController {
-
-    override func loadView() {
-        // A share extension on the Mac must have a view even when it never
-        // shows one; without it the host has nothing to present and the
-        // extension is torn down before `viewDidLoad` runs.
-        view = NSView(frame: .zero)
-    }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        Task { await handOff() }
-    }
-
-    private func handOff() async {
-        if let url = await sharedURL() {
-            var components = URLComponents()
-            components.scheme = "feedmeseymour"
-            components.host = "add"
-            components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
-            if let destination = components.url {
-                NSWorkspace.shared.open(destination)
-            }
-        }
-        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
-    }
-
-    private func sharedURL() async -> URL? {
-        let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
-        for item in items {
-            for provider in item.attachments ?? [] {
-                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
-                   let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
-                    return url
-                }
-                if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
-                   let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String,
-                   let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                    return url
-                }
-            }
-        }
-        return nil
-    }
-}
-#endif

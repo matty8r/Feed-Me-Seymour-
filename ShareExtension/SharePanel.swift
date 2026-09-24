@@ -7,12 +7,16 @@
 //  sheet closes itself.
 //
 
-#if os(iOS)
 import SwiftUI
 
 struct SharePanel: View {
 
     let load: () async -> URL?
+    /// What "subscribe" means differs by platform: iOS records it for the app
+    /// to write in, the Mac hands it straight to the app, which is running and
+    /// can be opened. The panel does not need to know which.
+    let subscribe: (DiscoveredFeed) -> Void
+    let isWaiting: (DiscoveredFeed) -> Bool
     let done: () -> Void
 
     private enum Stage: Equatable {
@@ -82,7 +86,7 @@ struct SharePanel: View {
         case .found(let feed):
             feedSummary(feed)
             Button {
-                subscribe(to: feed)
+                take(feed)
             } label: {
                 Text("Subscribe")
                     .font(.body.weight(.semibold))
@@ -140,24 +144,16 @@ struct SharePanel: View {
             return
         }
 
-        // Waiting in the queue already, from an earlier share.
-        if SharedInbox.pending().contains(where: { $0.feedURL == best.url.absoluteString }) {
+        // Waiting already, from an earlier share.
+        if isWaiting(best) {
             stage = .already(best)
         } else {
             stage = .found(best)
         }
     }
 
-    private func subscribe(to feed: DiscoveredFeed) {
-        SharedInbox.add(
-            PendingSubscription(
-                feedURL: feed.url.absoluteString,
-                title: feed.title,
-                homePageURL: feed.homePageURL?.absoluteString,
-                iconURL: feed.iconURL?.absoluteString,
-                addedAt: .now
-            )
-        )
+    private func take(_ feed: DiscoveredFeed) {
+        subscribe(feed)
         stage = .subscribed(feed.title)
 
         // Long enough to read, short enough not to be in the way.
@@ -167,4 +163,3 @@ struct SharePanel: View {
         }
     }
 }
-#endif
