@@ -47,12 +47,13 @@ struct SubscriptionListView: View {
 
         List(selection: selection) {
             Section {
-                // Unread first: it is what a reader opens the app to deal
-                // with, and the only one of the three with a number that
-                // changes while they are looking at it.
-                collectionRow(.unread, title: "Unread", symbol: "circle.inset.filled", count: totalUnread)
-                collectionRow(.all, title: "All Articles", symbol: "tray.full", count: nil)
-                collectionRow(.starred, title: "Favorites", symbol: "star.fill", count: totalStarred)
+                // One row, not two. "Unread" was a second way of saying what
+                // the Hide Read Articles toggle already says, and the two
+                // could disagree — picking Unread with the toggle off left
+                // you looking at a list the sidebar called something else.
+                // The count that mattered stays, as a badge.
+                collectionRow(.all, title: "Articles", symbol: "tray.full", count: totalUnread)
+                collectionRow(.starred, title: "Bookmarks", symbol: "star.fill", count: totalStarred)
             }
 
             Section("Subscriptions") {
@@ -109,7 +110,7 @@ struct SubscriptionListView: View {
             }
             Button("Cancel", role: .cancel) { feedPendingRemoval = nil }
         } message: {
-            Text("Its articles will be removed. Favorites in this feed go too.")
+            Text("Its articles will be removed. Bookmarks in this feed go too.")
         }
         .onReceive(NotificationCenter.default.publisher(for: .markAllRead)) { _ in
             markAllRead()

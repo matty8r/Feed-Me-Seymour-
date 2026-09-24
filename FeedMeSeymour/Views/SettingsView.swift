@@ -162,7 +162,7 @@ struct SettingsView: View {
                 }
                 .disabled(!model.sync.isActive || model.sync.isSyncing)
 
-                Text("Subscriptions, favorites and read state travel between your devices. Article text and media stay on each device and are re-downloaded from the publisher when needed.")
+                Text("Subscriptions, bookmarks and read state travel between your devices. Article text and media stay on each device and are re-downloaded from the publisher when needed.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

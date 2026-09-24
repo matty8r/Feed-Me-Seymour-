@@ -331,7 +331,7 @@ struct ArticleReaderView: View {
     private var emptyBody: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(article.isPlaceholder
-                 ? "This favorite came from another device. Its text will appear the next time this feed is refreshed."
+                 ? "This bookmark came from another device. Its text will appear the next time this feed is refreshed."
                  : "This entry is only a headline.")
                 .font(typography.body)
                 .foregroundStyle(palette.secondaryInk)

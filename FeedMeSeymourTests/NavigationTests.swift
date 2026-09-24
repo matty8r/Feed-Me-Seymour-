@@ -38,7 +38,7 @@ struct NavigationTests {
         model.expandedArticleID = ids[1]
         #expect(model.isReaderExpanded)
 
-        model.selection = .unread
+        model.selection = .starred
 
         #expect(!model.isReaderExpanded)
         #expect(model.selectedArticleID == nil)
@@ -57,11 +57,11 @@ struct NavigationTests {
     @Test("Re-picking the feed you're already on leaves the reader alone")
     func samefeedKeepsReader() {
         let (model, ids, _) = makeModel()
-        model.selection = .unread
+        model.selection = .starred
         model.selectedArticleID = ids[2]
         model.expandedArticleID = ids[2]
 
-        model.selection = .unread
+        model.selection = .starred
 
         #expect(model.isReaderExpanded)
         #expect(model.selectedArticleID == ids[2])

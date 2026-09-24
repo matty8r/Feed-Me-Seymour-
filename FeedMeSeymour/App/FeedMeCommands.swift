@@ -44,7 +44,7 @@ struct FeedMeCommands: Commands {
 
             Divider()
 
-            Button("Toggle Favorite") {
+            Button("Toggle Bookmark") {
                 NotificationCenter.default.post(name: .toggleFavorite, object: nil)
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])

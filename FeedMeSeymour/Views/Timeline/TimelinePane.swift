@@ -32,8 +32,6 @@ struct TimelinePane: View {
         switch model.selection {
         case .none, .some(.all):
             articles = allArticles
-        case .some(.unread):
-            articles = allArticles.filter { !$0.isRead }
         case .some(.starred):
             articles = allArticles.filter(\.isStarred)
         case .some(.feed(let id)):
@@ -59,9 +57,8 @@ struct TimelinePane: View {
 
     private var scopeTitle: String {
         switch model.selection {
-        case .none, .some(.all): "All Articles"
-        case .some(.unread): "Unread"
-        case .some(.starred): "Favorites"
+        case .none, .some(.all): "Articles"
+        case .some(.starred): "Bookmarks"
         case .some(.feed(let id)): context.feed(with: id)?.displayTitle ?? "Feed"
         }
     }
@@ -281,15 +278,13 @@ struct TimelinePane: View {
 
     private var emptyTitle: String {
         switch model.selection {
-        case .some(.unread): "All Caught Up"
-        case .some(.starred): "No Favorites"
+        case .some(.starred): "No Bookmarks"
         default: "Nothing Here Yet"
         }
     }
 
     private var emptySymbol: String {
         switch model.selection {
-        case .some(.unread): "checkmark.circle"
         case .some(.starred): "star"
         default: "leaf"
         }
@@ -297,7 +292,6 @@ struct TimelinePane: View {
 
     private var emptyMessage: String {
         switch model.selection {
-        case .some(.unread): "You've read everything. Go outside."
         case .some(.starred): "Star an article and it will be waiting here."
         default: "Add a subscription, then pull to refresh."
         }

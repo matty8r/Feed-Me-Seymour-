@@ -22,7 +22,7 @@ struct StarButton: View {
     @State private var isPopping = false
 
     private var title: String {
-        isStarred ? "Remove from Favorites" : "Add to Favorites"
+        isStarred ? "Remove Bookmark" : "Add Bookmark"
     }
 
     var body: some View {
@@ -34,7 +34,7 @@ struct StarButton: View {
                     .contentTransition(.symbolEffect(.replace))
                     .scaleEffect(isPopping ? 1.3 : 1)
                 if showsLabel {
-                    Text(isStarred ? "Favorited" : "Favorite")
+                    Text(isStarred ? "Bookmarked" : "Bookmark")
                         .font(.callout)
                 }
             }

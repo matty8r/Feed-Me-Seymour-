@@ -92,7 +92,7 @@ struct ArticleRowView: View {
                 article.toggleStar()
                 try? context.save()
             } label: {
-                Label("Favorite", systemImage: article.isStarred ? "star.slash" : "star")
+                Label("Bookmark", systemImage: article.isStarred ? "star.slash" : "star")
             }
             .tint(palette.favorite)
         }
@@ -165,7 +165,7 @@ struct ArticleRowView: View {
                 mediaBadge("play.rectangle", "Video")
             }
             if article.isPlaceholder {
-                mediaBadge("icloud", "Favorited on another device")
+                mediaBadge("icloud", "Bookmarked on another device")
             }
             if let author = article.author?.nilIfEmpty, !isCompact {
                 Text(author)
@@ -202,7 +202,7 @@ struct ArticleRowView: View {
                 settings: settings
             )
         }
-        Button(article.isStarred ? "Remove from Favorites" : "Add to Favorites", systemImage: article.isStarred ? "star.slash" : "star") {
+        Button(article.isStarred ? "Remove Bookmark" : "Add Bookmark", systemImage: article.isStarred ? "star.slash" : "star") {
             article.toggleStar()
             try? context.save()
         }
@@ -224,7 +224,7 @@ struct ArticleRowView: View {
         parts.append(article.displayTitle)
         parts.append(article.publishedAt.relativeStamp)
         parts.append("\(article.readingMinutes) minute read")
-        if article.isStarred { parts.append("Favorite") }
+        if article.isStarred { parts.append("Bookmarked") }
         if !article.isRead { parts.append("Unread") }
         return parts.joined(separator: ", ")
     }

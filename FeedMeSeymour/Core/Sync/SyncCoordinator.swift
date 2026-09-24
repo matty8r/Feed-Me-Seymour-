@@ -58,7 +58,7 @@ final class SyncCoordinator {
 
     var statusDescription: String {
         if !isCloudBacked { return "iCloud isn’t available on this device." }
-        if !isEnabled { return "Off. Subscriptions and favorites stay on this device." }
+        if !isEnabled { return "Off. Subscriptions and bookmarks stay on this device." }
         if isSyncing { return "Syncing…" }
         if let lastError { return lastError }
         // CloudKit's own account of itself comes first. Only when it has
@@ -272,13 +272,13 @@ final class SyncCoordinator {
         }
 
         // A favourite starred on another device whose body has never reached
-        // this one. Stand in a stub so it shows up in Favorites; the next
+        // this one. Stand in a stub so it shows up in Bookmarks; the next
         // refresh of that feed matches it by guid and fills it in.
         for state in statesByKey.values where state.isStarred && !matched.contains(state.stateKey) {
             guard let feed = feedsByURL[state.feedURLString] else { continue }
             let stub = Article(
                 guid: state.guid,
-                title: state.title.nilIfEmpty ?? "Favorite",
+                title: state.title.nilIfEmpty ?? "Bookmark",
                 url: state.articleURL,
                 publishedAt: state.publishedAt == .distantPast ? (state.starredAt ?? now) : state.publishedAt
             )

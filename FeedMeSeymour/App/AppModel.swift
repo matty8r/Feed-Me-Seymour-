@@ -13,7 +13,6 @@ import Observation
 
 enum FeedSelection: Hashable {
     case all
-    case unread
     case starred
     case feed(PersistentIdentifier)
 
