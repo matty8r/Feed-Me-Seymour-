@@ -40,8 +40,12 @@ struct SharePanel: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(systemName: "leaf.fill")
-                    .foregroundStyle(.green)
+                // The app's own icon rather than a stand-in symbol: this panel
+                // appears over somebody else's app, so it has to say whose it is.
+                Image("PanelIcon")
+                    .resizable()
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                 Text("Feed Me, Seymour!")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)

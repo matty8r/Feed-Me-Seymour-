@@ -18,10 +18,10 @@
 		FE0000000000000000000000B8 /* ContentBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000000A8 /* ContentBlock.swift */; };
 		FE0000000000000000000000B9 /* StringHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000000A9 /* StringHelpers.swift */; };
 		FE0000000000000000000000BA /* MediaKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000000AA /* MediaKind.swift */; };
-		FE0000000000000000000090 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000024 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		FE0000000000000000000091 /* ShareExtension/SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000025 /* ShareExtension/SharedInbox.swift */; };
 		FE0000000000000000000000BB /* HTMLTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000000AB /* HTMLTokenizer.swift */; };
 		FE0000000000000000000000BC /* HTMLEntities.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000000AC /* HTMLEntities.swift */; };
+		FE0000000000000000000090 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000024 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FE0000000000000000000091 /* ShareExtension/SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000025 /* ShareExtension/SharedInbox.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,14 +67,14 @@
 		FE0000000000000000000000A8 /* ContentBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ContentBlock.swift; path = FeedMeSeymour/Core/Content/ContentBlock.swift; sourceTree = "<group>"; };
 		FE0000000000000000000000A9 /* StringHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StringHelpers.swift; path = FeedMeSeymour/Core/Models/StringHelpers.swift; sourceTree = "<group>"; };
 		FE0000000000000000000000AA /* MediaKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MediaKind.swift; path = FeedMeSeymour/Core/Models/MediaKind.swift; sourceTree = "<group>"; };
+		FE0000000000000000000000AB /* HTMLTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HTMLTokenizer.swift; path = FeedMeSeymour/Core/Content/HTMLTokenizer.swift; sourceTree = "<group>"; };
+		FE0000000000000000000000AC /* HTMLEntities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HTMLEntities.swift; path = FeedMeSeymour/Core/Content/HTMLEntities.swift; sourceTree = "<group>"; };
 		FE0000000000000000000020 /* FeedMeSeymour.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FeedMeSeymour.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FE0000000000000000000021 /* FeedMeSeymourTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FeedMeSeymourTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FE0000000000000000000022 /* FeedMeSeymour.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FeedMeSeymour.entitlements; sourceTree = "<group>"; };
 		FE0000000000000000000023 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		FE0000000000000000000024 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FE0000000000000000000025 /* ShareExtension/SharedInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtension/SharedInbox.swift; sourceTree = "<group>"; };
-		FE0000000000000000000000AB /* HTMLTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HTMLTokenizer.swift; path = FeedMeSeymour/Core/Content/HTMLTokenizer.swift; sourceTree = "<group>"; };
-		FE0000000000000000000000AC /* HTMLEntities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HTMLEntities.swift; path = FeedMeSeymour/Core/Content/HTMLEntities.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
