@@ -112,6 +112,53 @@ struct ArticleContentTests {
         #expect(image.aspectRatio == 1600.0 / 900.0)
     }
 
+    /// A srcset is comma-separated, but nothing stops a URL from containing a
+    /// comma — and Cloudflare's image resizing puts its options in the path,
+    /// so every picture on a site behind it looks like
+    /// `/cdn-cgi/image/format=auto,width=1200,metadata=none/photo.jpg`.
+    /// Splitting on commas turned each candidate into rubble and picked
+    /// whichever piece happened to carry the width, which fetched a 404 and
+    /// drew the broken-picture symbol instead. kottke.org is one such site.
+    @Test("A srcset candidate may contain commas of its own")
+    func srcsetWithCommasInTheURL() {
+        // Verbatim from kottke.org's feed, double slash and all.
+        let blocks = parse("""
+        <img src="/cdn-cgi/image/format=auto,fit=scale-down,width=1200,metadata=none//images/posts/01/editor-1790153351-9cb73c8a.jpg" \
+        srcset="/cdn-cgi/image/format=auto,fit=scale-down,width=500,metadata=none//images/posts/01/editor-1790153351-9cb73c8a.jpg 500w, \
+        /cdn-cgi/image/format=auto,fit=scale-down,width=1200,metadata=none//images/posts/01/editor-1790153351-9cb73c8a.jpg 1200w">
+        """)
+        guard case .image(let image) = blocks[0].kind else {
+            Issue.record("expected an image")
+            return
+        }
+        #expect(image.url.absoluteString
+            == "https://example.com/cdn-cgi/image/format=auto,fit=scale-down,width=1200,metadata=none//images/posts/01/editor-1790153351-9cb73c8a.jpg")
+    }
+
+    @Test("A srcset candidate with no descriptor still resolves")
+    func srcsetWithoutDescriptors() {
+        let blocks = parse("""
+        <img src="fallback.jpg" srcset="only.jpg">
+        """)
+        guard case .image(let image) = blocks[0].kind else {
+            Issue.record("expected an image")
+            return
+        }
+        #expect(image.url.absoluteString == "https://example.com/post/only.jpg")
+    }
+
+    @Test("Pixel-density descriptors still beat width descriptors")
+    func srcsetDensityDescriptors() {
+        let blocks = parse("""
+        <img src="a.jpg" srcset="a.jpg 1x, b.jpg 3x">
+        """)
+        guard case .image(let image) = blocks[0].kind else {
+            Issue.record("expected an image")
+            return
+        }
+        #expect(image.url.absoluteString == "https://example.com/post/b.jpg")
+    }
+
     @Test("Lazy-loaded images are found and tracking pixels are not")
     func lazyImages() {
         let blocks = parse("""

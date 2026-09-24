@@ -657,18 +657,59 @@ private extension Builder {
     /// `foo-320.jpg 320w, foo-1024.jpg 1024w` — take the widest.
     static func largestCandidate(inSrcset srcset: String, baseURL: URL?) -> URL? {
         var best: (url: URL, weight: Double)?
-        for entry in srcset.split(separator: ",") {
-            let parts = String(entry).trimmed.split(separator: " ", omittingEmptySubsequences: true)
-            guard let first = parts.first, let url = URL.resolving(String(first), relativeTo: baseURL), url.scheme != "data" else { continue }
+        for candidate in srcsetCandidates(srcset) {
+            guard let url = URL.resolving(candidate.url, relativeTo: baseURL), url.scheme != "data" else { continue }
             var weight = 1.0
-            if parts.count > 1 {
-                let descriptor = String(parts[1])
-                weight = Double(descriptor.filter { $0.isNumber || $0 == "." }) ?? 1
-                if descriptor.hasSuffix("x") { weight *= 1000 }
+            if !candidate.descriptor.isEmpty {
+                weight = Double(candidate.descriptor.filter { $0.isNumber || $0 == "." }) ?? 1
+                if candidate.descriptor.hasSuffix("x") { weight *= 1000 }
             }
             if best == nil || weight > best!.weight { best = (url, weight) }
         }
         return best?.url
+    }
+
+    /// Split a srcset into its candidates, the way HTML says to.
+    ///
+    /// Not `split(separator: ",")`. A candidate's URL is simply everything up
+    /// to the next space, and it is allowed to contain commas — Cloudflare's
+    /// image resizing keeps its options in the path, so every picture on a
+    /// site behind it arrives as
+    /// `/cdn-cgi/image/format=auto,width=1200,metadata=none/photo.jpg`.
+    /// Splitting on commas reduced each of those to rubble and then picked
+    /// whichever fragment had ended up next to the width, which fetched a 404.
+    ///
+    /// A comma only ends a candidate where it trails the URL — the
+    /// descriptor-less `a.jpg, b.jpg` form — or closes the descriptor.
+    static func srcsetCandidates(_ srcset: String) -> [(url: String, descriptor: String)] {
+        var candidates: [(url: String, descriptor: String)] = []
+        let characters = Array(srcset)
+        var index = 0
+
+        while index < characters.count {
+            while index < characters.count, characters[index].isWhitespace || characters[index] == "," {
+                index += 1
+            }
+            guard index < characters.count else { break }
+
+            let urlStart = index
+            while index < characters.count, !characters[index].isWhitespace { index += 1 }
+            var url = String(characters[urlStart..<index])
+
+            var descriptor = ""
+            if url.hasSuffix(",") {
+                while url.hasSuffix(",") { url.removeLast() }
+            } else {
+                while index < characters.count, characters[index].isWhitespace { index += 1 }
+                let descriptorStart = index
+                while index < characters.count, characters[index] != "," { index += 1 }
+                descriptor = String(characters[descriptorStart..<index]).trimmed
+                if index < characters.count { index += 1 }
+            }
+
+            if !url.isEmpty { candidates.append((url, descriptor)) }
+        }
+        return candidates
     }
 
     static func isNativelyPlayable(url: URL, mimeType: String?) -> Bool {
