@@ -52,8 +52,13 @@ struct RootView: View {
             }
             .animation(.spring(response: 0.36, dampingFraction: 0.86), value: speech.isActive)
         }
-        .sheet(isPresented: $model.isShowingAddSubscription) {
-            AddSubscriptionView()
+        .sheet(isPresented: $model.isShowingAddSubscription,
+               onDismiss: { model.pendingSubscriptionURL = nil }) {
+            // Handed in rather than read out of the model by the sheet itself.
+            // Clearing it from inside `onAppear` invalidated this view while it
+            // was being shown, which rebuilt the sheet with fresh state and
+            // threw away the very address that had just been put in it.
+            AddSubscriptionView(initialInput: model.pendingSubscriptionURL)
                 .environment(model)
                 .environment(settings)
                 .environment(\.palette, palette)
@@ -76,6 +81,8 @@ struct RootView: View {
             if isShowing { exportDocument = OPMLDocument(entries: exportEntries()) }
         }
         .task { await firstRun() }
+        .onOpenURL { open($0) }
+        .onAppear { collectSharedSubscription() }
         .onReceive(NotificationCenter.default.publisher(for: .refreshAll)) { _ in
             Task { await model.refresher.refreshAll(in: context) }
         }
@@ -88,6 +95,9 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
+                // A page shared while the app was in the background is waiting
+                // in the group container; this is the moment it can be acted on.
+                collectSharedSubscription()
                 Task {
                     await synchronize()
                     await refreshIfStale()
@@ -145,6 +155,29 @@ struct RootView: View {
     }
 
     // MARK: - Lifecycle
+
+    /// `feedmeseymour://add?url=…`, sent by the share extension when a page is
+    /// shared from Safari. The extension does no more than pass the address
+    /// along; finding the feed behind it is this side's job, and the add sheet
+    /// already does that.
+    /// A page handed over by the share extension. It cannot open the app
+    /// itself on iOS, so it leaves the address in the shared group and the app
+    /// picks it up the next time it is in front of someone.
+    private func collectSharedSubscription() {
+        guard let shared = SharedInbox.collect() else { return }
+        model.pendingSubscriptionURL = shared
+        model.isShowingAddSubscription = true
+    }
+
+    private func open(_ url: URL) {
+        guard url.scheme == "feedmeseymour", url.host() == "add" else { return }
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        guard let shared = components?.queryItems?.first(where: { $0.name == "url" })?.value,
+              !shared.trimmed.isEmpty else { return }
+
+        model.pendingSubscriptionURL = shared
+        model.isShowingAddSubscription = true
+    }
 
     private func firstRun() async {
         await synchronize()

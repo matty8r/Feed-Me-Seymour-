@@ -50,6 +50,10 @@ final class AppModel {
 
     // Sheets
     var isShowingAddSubscription = false
+
+    /// An address handed over by the share extension, waiting for the add
+    /// sheet to open and pick it up.
+    var pendingSubscriptionURL: String?
     var isShowingSettings = false
     var isShowingOPMLImporter = false
     var isShowingOPMLExporter = false

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- How the share extension hands a shared page back to the app. The rest
+	     of this file is generated from the target's INFOPLIST_KEY_ settings
+	     and merged in at build time. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.backyard.feedmeseymour</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>feedmeseymour</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -16,12 +16,19 @@ struct AddSubscriptionView: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
 
-    @State private var input = ""
+    @State private var input: String
     @State private var results: [DiscoveredFeed] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var searchTask: Task<Void, Never>?
     @State private var hasPasteboardLink = false
+    @State private var hasSearchedInitialInput = false
+
+    /// An address the share extension sent over, if this sheet was opened by
+    /// sharing a page rather than by pressing the plus button.
+    init(initialInput: String? = nil) {
+        _input = State(initialValue: initialInput ?? "")
+    }
     @FocusState private var isFieldFocused: Bool
 
     @Query private var existingFeeds: [Feed]
@@ -51,7 +58,13 @@ struct AddSubscriptionView: View {
         #endif
         .onAppear {
             isFieldFocused = true
-            offerPasteboardLink()
+            if input.isEmpty {
+                offerPasteboardLink()
+            } else if !hasSearchedInitialInput {
+                // Shared from somewhere else, so go and look without being asked.
+                hasSearchedInitialInput = true
+                search()
+            }
         }
         .onDisappear { searchTask?.cancel() }
     }
@@ -60,6 +73,7 @@ struct AddSubscriptionView: View {
     /// was opened, so save the paste.
     private func offerPasteboardLink() {
         guard input.isEmpty else { return }
+
         #if os(macOS)
         if let link = Platform.pasteboardLink { input = link }
         #else
