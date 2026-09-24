@@ -179,7 +179,18 @@ final class FeedRefreshService {
     }
 
     /// Publishers edit in place. Refresh the text, never the reader's own state.
-    private func update(_ article: Article, from item: ParsedItem) {
+    func update(_ article: Article, from item: ParsedItem) {
+        // Before the guard, not after it. A picture can be missing from an
+        // article whose text has not changed since it was stored — the app
+        // only learned to dig a lead image out of an entry's own HTML after
+        // some of these were already saved, and a blog that does not edit its
+        // back catalogue would never have gone down the path that fills it in.
+        // Those articles would have stayed without a thumbnail forever, no
+        // matter how many times the feed was refreshed.
+        if let banner = item.bannerImageURL, article.bannerImageURL == nil {
+            article.bannerImageURL = banner
+        }
+
         let incomingHTML = item.contentHTML ?? item.summaryHTML
         let currentHTML = article.contentHTML ?? article.summaryHTML
         guard incomingHTML != currentHTML || item.title != article.title else { return }
@@ -197,7 +208,6 @@ final class FeedRefreshService {
         if let content = item.contentHTML { article.contentHTML = content }
         if let summary = item.summaryHTML { article.summaryHTML = summary }
         if let modified = item.dateModified { article.updatedAt = modified }
-        if let banner = item.bannerImageURL, article.bannerImageURL == nil { article.bannerImageURL = banner }
 
         let plain = HTMLTextExtractor.plainText(from: article.bestHTML ?? "")
         article.plainSummary = plain.truncated(to: 320)

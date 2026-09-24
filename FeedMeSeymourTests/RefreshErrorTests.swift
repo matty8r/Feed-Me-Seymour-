@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import SwiftData
 @testable import FeedMeSeymour
 
 @Suite("Refresh failures")
@@ -42,5 +43,67 @@ struct RefreshErrorTests {
     func otherDomain() {
         let imposter = NSError(domain: "com.example.something", code: NSURLErrorCancelled)
         #expect(!imposter.isCancellation)
+    }
+}
+
+/// Refreshing an article the app already has.
+@MainActor
+@Suite("Refresh backfills")
+struct RefreshBackfillTests {
+
+    private func makeArticle(bannerImageURL: URL? = nil) -> (Article, ModelContext) {
+        let context = ModelContext(Persistence.makeInMemoryContainer())
+        let feed = Feed(feedURL: URL(string: "https://branchesthreads.com/feed.xml")!, title: "Branches and Threads")
+        context.insert(feed)
+        let article = Article(
+            guid: "https://branchesthreads.com/night-flowers.html",
+            title: "Night flowers",
+            summaryHTML: "<p><img src=\"https://branchesthreads.com/assets/night.jpg\" alt=\"night\"></p>",
+            publishedAt: .now,
+            bannerImageURL: bannerImageURL
+        )
+        context.insert(article)
+        article.feed = feed
+        return (article, context)
+    }
+
+    private func item(banner: URL?) -> ParsedItem {
+        var item = ParsedItem()
+        item.guid = "https://branchesthreads.com/night-flowers.html"
+        item.title = "Night flowers"
+        // Byte for byte what is already stored: the post has not been edited.
+        item.summaryHTML = "<p><img src=\"https://branchesthreads.com/assets/night.jpg\" alt=\"night\"></p>"
+        item.bannerImageURL = banner
+        return item
+    }
+
+    /// The picture arrives from a later version of the parser, on an entry
+    /// nobody has touched since it was saved. The guard that skips unchanged
+    /// text must not carry the picture off with it.
+    @Test("A missing picture is filled in even when the text has not changed")
+    func backfillsBannerOnUnchangedArticle() {
+        let (article, _) = makeArticle(bannerImageURL: nil)
+        let banner = URL(string: "https://branchesthreads.com/assets/night.jpg")!
+
+        FeedRefreshService().update(article, from: item(banner: banner))
+
+        #expect(article.bannerImageURL == banner)
+    }
+
+    @Test("A picture already chosen is left alone")
+    func doesNotOverwriteAnExistingBanner() {
+        let chosen = URL(string: "https://branchesthreads.com/assets/chosen.jpg")!
+        let (article, _) = makeArticle(bannerImageURL: chosen)
+
+        FeedRefreshService().update(article, from: item(banner: URL(string: "https://example.com/other.jpg")!))
+
+        #expect(article.bannerImageURL == chosen)
+    }
+
+    @Test("Nothing to backfill leaves the article as it was")
+    func noBannerOffered() {
+        let (article, _) = makeArticle(bannerImageURL: nil)
+        FeedRefreshService().update(article, from: item(banner: nil))
+        #expect(article.bannerImageURL == nil)
     }
 }
