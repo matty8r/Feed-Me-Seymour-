@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- No app group here, unlike the iOS build. The Mac extension opens the
+	     app directly, so it has nothing to leave anywhere — and an app group
+	     would drag a Developer ID provisioning profile in behind it for no
+	     gain. Sandbox only, which needs no profile at all. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

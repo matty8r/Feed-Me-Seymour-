@@ -43,9 +43,35 @@ final class ShareViewController: ShareHostController {
     #endif
 
     private func handOff() async {
-        if let url = await sharedURL() {
-            SharedInbox.hand(over: url)
+        guard let url = await sharedURL() else {
+            finish()
+            return
         }
+        #if os(macOS)
+        // The Mac lets an extension open its own app, so it does — the sheet
+        // comes up while the page is still in front of you. No shared group is
+        // needed for this, which is why the Mac build does not ask for one.
+        NSWorkspace.shared.open(handOffURL(for: url))
+        finish()
+        #else
+        // iOS does not: `extensionContext.open` is sanctioned for only a couple
+        // of extension kinds and from here does nothing at all, silently. So
+        // the address is left in the shared group for the app to collect.
+        SharedInbox.hand(over: url)
+        finish()
+        #endif
+    }
+
+    /// `feedmeseymour://add?url=…`, which the app answers.
+    private func handOffURL(for url: URL) -> URL {
+        var components = URLComponents()
+        components.scheme = "feedmeseymour"
+        components.host = "add"
+        components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
+        return components.url ?? url
+    }
+
+    private func finish() {
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
 
