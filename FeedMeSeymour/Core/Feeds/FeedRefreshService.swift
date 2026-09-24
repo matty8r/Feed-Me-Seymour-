@@ -67,9 +67,13 @@ final class FeedRefreshService {
         }
 
         var failures: [String] = []
+        // Cancelled fetches are not judged either way, so they must not make a
+        // single real failure look like every subscription failing.
+        var judged = 0
         for (id, result) in results {
             completedCount += 1
             guard let feed = byID[id] else { continue }
+            if case .failure(let error) = result, error.isCancellation {} else { judged += 1 }
 
             switch result {
             case .success(.notModified):
@@ -78,6 +82,16 @@ final class FeedRefreshService {
 
             case .success(.fetched(let fetched)):
                 merge(fetched, into: feed, context: context)
+
+            // A cancelled request did not fail: whoever asked for the refresh
+            // went away mid-flight — at launch that is the view the `.task`
+            // was attached to being replaced. Left to fall through, it stamped
+            // the feed with an error and put the word "cancelled" on screen,
+            // which is how a refresh nobody abandoned on purpose came to look
+            // like a broken subscription. Say nothing, and leave `lastFetched`
+            // alone so the feed still counts as stale and is tried again.
+            case .failure(let error) where error.isCancellation:
+                break
 
             case .failure(let error):
                 feed.lastFetched = .now
@@ -88,7 +102,7 @@ final class FeedRefreshService {
 
         try? context.save()
 
-        if failures.count == results.count, let first = failures.first {
+        if failures.count == judged, let first = failures.first {
             lastErrorMessage = first
         } else if !failures.isEmpty {
             lastErrorMessage = failures.count == 1
@@ -223,4 +237,16 @@ final class FeedRefreshService {
         return feed
     }
 
+}
+
+
+extension Error {
+    /// Cancellation is not failure. It arrives as `CancellationError` from
+    /// structured concurrency and as `NSURLErrorCancelled` from URLSession,
+    /// depending on where the task was when it was stopped.
+    var isCancellation: Bool {
+        if self is CancellationError { return true }
+        let error = self as NSError
+        return error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled
+    }
 }
