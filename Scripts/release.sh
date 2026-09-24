@@ -158,6 +158,26 @@ done
 
 # ------------------------------------------------------------------- archive
 
+# Settings passed on the xcodebuild command line apply to every target, and the
+# app and the share extension need different ones: different entitlements, and
+# a profile for one and none for the other. An xcconfig can tell them apart,
+# because it is expanded per target and can look itself up by TARGET_NAME.
+#
+# The extension gets no profile on purpose. Its Mac entitlements are the
+# sandbox and nothing else, and an entitlement that needs a profile is the only
+# reason it would want one; handing it the app's profile is what the first
+# attempt at this did, and the app identifiers do not match.
+XCCONFIG="${WORK}/Release.xcconfig"
+cat >"${XCCONFIG}" <<CONFIG
+CODE_SIGN_ENTITLEMENTS = \$(CODE_SIGN_ENTITLEMENTS_\$(TARGET_NAME))
+CODE_SIGN_ENTITLEMENTS_${APP_NAME} = ${ENTITLEMENTS}
+CODE_SIGN_ENTITLEMENTS_ShareExtension = ShareExtension/ShareExtension-macOS.entitlements
+
+PROVISIONING_PROFILE_SPECIFIER = \$(PROVISIONING_PROFILE_SPECIFIER_\$(TARGET_NAME))
+PROVISIONING_PROFILE_SPECIFIER_${APP_NAME} = ${PROFILE_UUID}
+PROVISIONING_PROFILE_SPECIFIER_ShareExtension =
+CONFIG
+
 echo "==> Archiving"
 ARCHIVE="${WORK}/${APP_NAME}.xcarchive"
 xcodebuild archive \
@@ -166,11 +186,10 @@ xcodebuild archive \
     -configuration Release \
     -destination 'generic/platform=macOS' \
     -archivePath "${ARCHIVE}" \
+    -xcconfig "${XCCONFIG}" \
     CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM="${TEAM_ID}" \
     CODE_SIGN_IDENTITY="${IDENTITY}" \
-    PROVISIONING_PROFILE_SPECIFIER="${PROFILE_UUID}" \
-    CODE_SIGN_ENTITLEMENTS="${ENTITLEMENTS}" \
     | grep -E '^\*\*|error:' || true
 [ -d "${ARCHIVE}" ] || die "Archive failed."
 
