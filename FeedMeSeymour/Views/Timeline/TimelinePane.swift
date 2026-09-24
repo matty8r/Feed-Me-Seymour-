@@ -55,6 +55,12 @@ struct TimelinePane: View {
         return articles
     }
 
+    /// The feed being looked at, when the scope is a single subscription.
+    private var scopedFeed: Feed? {
+        guard case .some(.feed(let id)) = model.selection else { return nil }
+        return context.feed(with: id)
+    }
+
     private var scopeTitle: String {
         switch model.selection {
         case .none, .some(.all): "Articles"
@@ -103,12 +109,30 @@ struct TimelinePane: View {
             }
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.88), value: model.expandedArticleID)
-        .navigationTitle(model.isReaderExpanded ? "" : scopeTitle)
+        // Blank while the icon-and-name pair is in the bar, or the name is
+        // drawn twice: once by the title and once by the pair.
+        .navigationTitle(model.isReaderExpanded || scopedFeed != nil ? "" : scopeTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(model.isReaderExpanded ? .hidden : .visible, for: .navigationBar)
         #endif
         .toolbar { if !model.isReaderExpanded { timelineToolbar(articles) } }
+        // A subscription's own mark beside its name, the way the reader
+        // already shows it. `navigationTitle` can only take a string, so the
+        // pair goes in as a principal item; the title itself stays set, for
+        // the window's name and for what iOS puts on a back button.
+        .toolbar {
+            if !model.isReaderExpanded, let feed = scopedFeed {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 7) {
+                        FeedIconView(feed: feed, size: 16)
+                        Text(feed.displayTitle)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
         .onChange(of: articles.map(\.persistentModelID)) { _, ids in
             model.visibleArticleIDs = ids
         }
