@@ -21,6 +21,7 @@ struct AddSubscriptionView: View {
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var searchTask: Task<Void, Never>?
+    @State private var hasPasteboardLink = false
     @FocusState private var isFieldFocused: Bool
 
     @Query private var existingFeeds: [Feed]
@@ -48,8 +49,22 @@ struct AddSubscriptionView: View {
         #if os(macOS)
         .frame(minWidth: 480, minHeight: 470)
         #endif
-        .onAppear { isFieldFocused = true }
+        .onAppear {
+            isFieldFocused = true
+            offerPasteboardLink()
+        }
         .onDisappear { searchTask?.cancel() }
+    }
+
+    /// A link already on the pasteboard is nearly always the reason the sheet
+    /// was opened, so save the paste.
+    private func offerPasteboardLink() {
+        guard input.isEmpty else { return }
+        #if os(macOS)
+        if let link = Platform.pasteboardLink { input = link }
+        #else
+        hasPasteboardLink = Platform.pasteboardHasLink
+        #endif
     }
 
     // MARK: - Input
@@ -81,6 +96,25 @@ struct AddSubscriptionView: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            #if os(iOS)
+            // The Mac fills the field from the pasteboard on the way in, which
+            // iOS will not do quietly: reading the pasteboard there raises a
+            // system paste confirmation every single time the sheet opens,
+            // whether or not anyone meant to paste. A paste button reads on a
+            // press and asks nothing, so the link is one tap away instead.
+            if input.isEmpty, hasPasteboardLink {
+                PasteButton(payloadType: URL.self) { urls in
+                    guard let url = urls.first else { return }
+                    Task { @MainActor in
+                        input = url.absoluteString
+                        search()
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .buttonBorderShape(.capsule)
+            }
+            #endif
 
             Button(action: search) {
                 if isSearching {
