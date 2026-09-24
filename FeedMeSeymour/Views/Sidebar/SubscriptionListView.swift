@@ -47,8 +47,11 @@ struct SubscriptionListView: View {
 
         List(selection: selection) {
             Section {
-                collectionRow(.all, title: "All Articles", symbol: "tray.full", count: nil)
+                // Unread first: it is what a reader opens the app to deal
+                // with, and the only one of the three with a number that
+                // changes while they are looking at it.
                 collectionRow(.unread, title: "Unread", symbol: "circle.inset.filled", count: totalUnread)
+                collectionRow(.all, title: "All Articles", symbol: "tray.full", count: nil)
                 collectionRow(.starred, title: "Favorites", symbol: "star.fill", count: totalStarred)
             }
 
