@@ -357,8 +357,15 @@ enum SpeechVoiceCatalog {
         let wanted = (languageCode ?? AVSpeechSynthesisVoice.currentLanguageCode()).lowercased()
         let prefix = String(wanted.prefix(2))
 
-        return AVSpeechSynthesisVoice.speechVoices()
+        let matching = AVSpeechSynthesisVoice.speechVoices()
             .filter { $0.language.lowercased().hasPrefix(prefix) }
+        let readable = matching.filter {
+            isWorthReadingIn(identifier: $0.identifier,
+                             isPersonalVoice: $0.voiceTraits.contains(.isPersonalVoice))
+        }
+
+        // If a language has nothing but the oddities, an odd voice beats none.
+        return (readable.isEmpty ? matching : readable)
             .sorted { lhs, rhs in
                 if rank(lhs.quality) != rank(rhs.quality) { return rank(lhs.quality) > rank(rhs.quality) }
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
@@ -372,6 +379,27 @@ enum SpeechVoiceCatalog {
                     isPersonal: voice.voiceTraits.contains(.isPersonalVoice)
                 )
             }
+    }
+
+    /// Whether a voice is one you could listen to an article in.
+    ///
+    /// `speechVoices()` returns everything the system can make a noise with,
+    /// and most of it is not that. Of the twenty-five English voices iOS
+    /// offers, nineteen are either the novelty set that has shipped since the
+    /// eighties — Bells, Boing, Bubbles, Zarvox, Bad News, Whisper — or the
+    /// Eloquence set, which exists for screen readers and is deliberately
+    /// clipped and robotic. Left in, they bury the handful of voices anyone
+    /// would actually choose.
+    ///
+    /// A Personal Voice is always kept: someone who recorded their own has
+    /// said plainly which voice they want.
+    static func isWorthReadingIn(identifier: String, isPersonalVoice: Bool) -> Bool {
+        if isPersonalVoice { return true }
+        // MacinTalk and the novelty voices.
+        if identifier.hasPrefix("com.apple.speech.synthesis.voice.") { return false }
+        // Eloquence: a screen-reader set, not a reading-aloud set.
+        if identifier.hasPrefix("com.apple.eloquence.") { return false }
+        return true
     }
 
     private static func rank(_ quality: AVSpeechSynthesisVoiceQuality) -> Int {

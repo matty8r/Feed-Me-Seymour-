@@ -117,6 +117,15 @@ struct SettingsView: View {
                 Text("Code listings and tables are announced rather than read out. Articles in another language are read by a matching voice when one is installed.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+
+                // The voices worth having are a free download, and nothing in
+                // the system points you at them. Siri's own voice is not among
+                // them: Apple keeps it for Siri, and no app can ask for it.
+                Text(Platform.isMac
+                     ? "For better voices, look under System Settings → Accessibility → Spoken Content → System Voice → Manage Voices, and download an English voice marked Enhanced or Premium. Siri's voice isn't available to apps other than Siri."
+                     : "For better voices, look under Settings → Accessibility → Spoken Content → Voices, and download an English voice marked Enhanced or Premium. Siri's voice isn't available to apps other than Siri.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Subscriptions") {

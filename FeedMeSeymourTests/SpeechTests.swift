@@ -222,3 +222,53 @@ struct SpeechTests {
         #expect(SpeechScript.dominantLanguage(of: segments) == "en")
     }
 }
+
+/// Which voices are offered for reading an article.
+@Suite("Voice catalogue")
+struct VoiceCatalogTests {
+
+    @Test("The novelty voices are not offered")
+    func excludesNovelty() {
+        for id in ["com.apple.speech.synthesis.voice.Zarvox",
+                   "com.apple.speech.synthesis.voice.BadNews",
+                   "com.apple.speech.synthesis.voice.Boing",
+                   "com.apple.speech.synthesis.voice.Bubbles",
+                   "com.apple.speech.synthesis.voice.Whisper",
+                   "com.apple.speech.synthesis.voice.Fred"] {
+            #expect(!SpeechVoiceCatalog.isWorthReadingIn(identifier: id, isPersonalVoice: false), "\(id)")
+        }
+    }
+
+    /// Eloquence is a screen-reader set — clipped and robotic on purpose.
+    @Test("The Eloquence voices are not offered")
+    func excludesEloquence() {
+        for id in ["com.apple.eloquence.en-US.Grandma",
+                   "com.apple.eloquence.en-GB.Reed",
+                   "com.apple.eloquence.en-US.Rocko"] {
+            #expect(!SpeechVoiceCatalog.isWorthReadingIn(identifier: id, isPersonalVoice: false), "\(id)")
+        }
+    }
+
+    @Test("The real system voices are offered")
+    func keepsSystemVoices() {
+        for id in ["com.apple.voice.compact.en-US.Samantha",
+                   "com.apple.voice.super-compact.en-GB.Daniel",
+                   "com.apple.voice.enhanced.en-US.Evan",
+                   "com.apple.voice.premium.en-US.Zoe"] {
+            #expect(SpeechVoiceCatalog.isWorthReadingIn(identifier: id, isPersonalVoice: false), "\(id)")
+        }
+    }
+
+    /// Somebody who recorded their own voice has said which one they want.
+    @Test("A Personal Voice is always offered")
+    func keepsPersonalVoice() {
+        #expect(SpeechVoiceCatalog.isWorthReadingIn(
+            identifier: "com.apple.speech.synthesis.voice.custom.something",
+            isPersonalVoice: true))
+    }
+
+    @Test("Whatever is installed, some voice is offered")
+    func neverEmpty() {
+        #expect(!SpeechVoiceCatalog.voices(for: "en").isEmpty)
+    }
+}
